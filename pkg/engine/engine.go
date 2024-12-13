@@ -13,8 +13,6 @@ import (
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"google.golang.org/protobuf/proto"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/config"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
@@ -27,7 +25,9 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/source_metadatapb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/sourcespb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
+	"google.golang.org/protobuf/proto"
 )
 
 const detectionTimeout = 10 * time.Second
@@ -722,6 +722,11 @@ func (e *Engine) Finish(ctx context.Context) error {
 	close(e.results)    // Detector workers are done, close the results channel and call it a day.
 	e.WgNotifier.Wait() // Wait for the notifier workers to finish notifying results.
 
+	fmt.Println("--------------------------------")
+	fmt.Println(detectorsMap)
+	fmt.Println("--------------------------------")
+	fmt.Println(totalCount.Load())
+
 	e.metrics.ScanDuration = time.Since(e.metrics.scanStartTime)
 
 	return err
@@ -918,10 +923,15 @@ func (e *Engine) verificationOverlapWorker(ctx context.Context) {
 	for chunk := range e.verificationOverlapChunksChan {
 		for _, detector := range chunk.detectors {
 			isFalsePositive := detectors.GetFalsePositiveCheck(detector.Detector)
+			constraints, ok := registry.GetConstraints(detector.Type())
 
 			// DO NOT VERIFY at this stage of the pipeline.
 			matchedBytes := detector.Matches()
 			for _, match := range matchedBytes {
+				if ok && !constraints.IsEligible(match) {
+					continue
+				}
+
 				ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 				results, err := detector.FromData(ctx, false, match)
 				cancel()
@@ -1027,6 +1037,12 @@ func (e *Engine) detectorWorker(ctx context.Context) {
 	}
 }
 
+var (
+	detectorsMap = map[detectorspb.DetectorType]int{}
+	mu           sync.Mutex
+	totalCount   atomic.Int64
+)
+
 func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 	var start time.Time
 	if e.printAvgDetectorTime {
@@ -1038,6 +1054,8 @@ func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 
 	isFalsePositive := detectors.GetFalsePositiveCheck(data.detector.Detector)
 
+	constraints, ok := registry.GetConstraints(data.detector.Type())
+
 	var matchCount int
 	// To reduce the overhead of regex calls in the detector,
 	// we limit the amount of data passed to each detector.
@@ -1046,6 +1064,14 @@ func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 	// This avoids the need for additional regex processing on the entire chunk data.
 	matches := data.detector.Matches()
 	for _, matchBytes := range matches {
+		if ok && !constraints.IsEligible(matchBytes) {
+			continue
+		}
+
+		totalCount.Add(1)
+		mu.Lock()
+		detectorsMap[data.detector.Type()]++
+		mu.Unlock()
 		matchCount++
 		detectBytesPerMatch.Observe(float64(len(matchBytes)))
 

@@ -3,13 +3,14 @@ package pagerdutyapikey
 import (
 	"context"
 	"fmt"
-	regexp "github.com/wasilibs/go-re2"
 	"net/http"
 	"strings"
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
+	regexp "github.com/wasilibs/go-re2"
 )
 
 type Scanner struct {
@@ -26,6 +27,13 @@ var (
 	// Make sure that your group is surrounded in boundary characters such as below to reduce false positives.
 	keyPat = regexp.MustCompile(detectors.PrefixRegex([]string{"pagerduty", "pager_duty", "pd_", "pd-"}) + `\b(u\+[a-zA-Z0-9_+-]{18})\b`)
 )
+
+func init() {
+	registry.RegisterConstraints(detectorspb.DetectorType_PagerDutyApiKey, registry.DetectorPrefilterRule{
+		MinLength:    20,
+		AllowedChars: common.UnionChars(common.AlphaNumericChars(), "_+-"),
+	})
+}
 
 // Keywords are used for efficiently pre-filtering chunks.
 // Use identifiers in the secret preferably, or the provider name.
