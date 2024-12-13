@@ -4,14 +4,14 @@ import (
 	"context"
 	"net/http"
 
-	regexp "github.com/wasilibs/go-re2"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors/azure_entra"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors/azure_entra/serviceprincipal"
 	v2 "github.com/trufflesecurity/trufflehog/v3/pkg/detectors/azure_entra/serviceprincipal/v2"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
+	regexp "github.com/wasilibs/go-re2"
 )
 
 type Scanner struct {
@@ -34,6 +34,13 @@ var (
 	// TODO: Tighten this regex and replace it with above.
 	secretPat = regexp.MustCompile(`(?i)(?:secret|password| -p[ =]).{0,80}[^A-Za-z0-9!#$%&()*+,\-./:;<=>?@[\\\]^_{|}~]([A-Za-z0-9!#$%&()*+,\-./:;<=>?@[\\\]^_{|}~]{31,34})[^A-Za-z0-9!#$%&()*+,\-./:;<=>?@[\\\]^_{|}~]`)
 )
+
+func init() {
+	registry.RegisterConstraints(detectorspb.DetectorType_Azure, registry.DetectorPrefilterRule{
+		MinLength:    31,
+		AllowedChars: common.UnionChars(common.AlphaNumericChars(), "!#$%&()*+,-./:;<=>?@[\\]^_{|}~"),
+	})
+}
 
 func (s Scanner) Version() int {
 	return 1
