@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/kylelemons/godebug/pretty"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
 )
@@ -155,6 +154,9 @@ func BenchmarkFromChunkSmall(b *testing.B) {
 	d := Base64{}
 	data := detectors.MustGetBenchmarkData()["small"]
 
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		d.FromChunk(&sources.Chunk{Data: data})
 	}
@@ -164,6 +166,9 @@ func BenchmarkFromChunkMedium(b *testing.B) {
 	d := Base64{}
 	data := detectors.MustGetBenchmarkData()["medium"]
 
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		d.FromChunk(&sources.Chunk{Data: data})
 	}
@@ -171,8 +176,23 @@ func BenchmarkFromChunkMedium(b *testing.B) {
 
 func BenchmarkFromChunkLarge(b *testing.B) {
 	d := Base64{}
-	data := detectors.MustGetBenchmarkData()["big"]
+	data := detectors.MustGetBenchmarkData()["large"]
 
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		d.FromChunk(&sources.Chunk{Data: data})
+	}
+}
+
+func BenchmarkFromChunkXLarge(b *testing.B) {
+	d := Base64{}
+	data := detectors.MustGetBenchmarkData()["xlarge"]
+
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		d.FromChunk(&sources.Chunk{Data: data})
 	}
