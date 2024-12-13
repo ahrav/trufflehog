@@ -1,6 +1,8 @@
 package registry
 
 import (
+	"bytes"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,6 +163,129 @@ func TestRegisterAndGetConstraints(t *testing.T) {
 			if found && tt.checkCandidate != nil {
 				got := rules.IsEligible(tt.checkCandidate)
 				assert.Equal(t, tt.wantEligible, got, "failed to check if candidate is eligible")
+			}
+		})
+	}
+}
+
+// makeTestData creates a byte slice of specified size with a pattern of valid and invalid chars
+func makeTestData(size int, validChars, invalidChars []byte, validRunLength int) []byte {
+	buf := bytes.Buffer{}
+	buf.Grow(size)
+
+	// Create a pattern that alternates between valid and invalid characters
+	for buf.Len() < size {
+		// Add a run of valid characters
+		for i := 0; i < validRunLength && buf.Len() < size; i++ {
+			buf.WriteByte(validChars[i%len(validChars)])
+		}
+		// Add some invalid characters
+		for i := 0; i < 3 && buf.Len() < size; i++ {
+			buf.WriteByte(invalidChars[i%len(invalidChars)])
+		}
+	}
+
+	return buf.Bytes()
+}
+
+func BenchmarkIsEligible(b *testing.B) {
+	// Common test cases.
+	asciiRules := DetectorPrefilterRules{
+		MinLength:    5,
+		asciiOnly:    true,
+		allowedASCII: func() asciiSet { set, _ := makeASCIISet("abcdef123456"); return set }(),
+	}
+
+	nonAsciiRules := DetectorPrefilterRules{
+		MinLength: 5,
+		asciiOnly: false,
+		allowedMap: map[rune]bool{
+			'α': true, 'β': true, '∆': true,
+			'a': true, 'b': true, 'c': true,
+		},
+	}
+
+	noConstraints := DetectorPrefilterRules{}
+
+	// Test data for larger inputs.
+	validChars := []byte("abcdef123456")
+	invalidChars := []byte("!@#$%^")
+	sizes := []int{64, 512, 1024, 4096}
+
+	benchCases := []struct {
+		name      string
+		rules     DetectorPrefilterRules
+		candidate []byte
+	}{
+		{
+			name:      "ascii_only_valid_match",
+			rules:     asciiRules,
+			candidate: []byte("test123abc"),
+		},
+		{
+			name:      "ascii_only_no_match",
+			rules:     asciiRules,
+			candidate: []byte("test!!!abc"),
+		},
+		{
+			name:      "non_ascii_valid_match",
+			rules:     nonAsciiRules,
+			candidate: []byte("αβ∆abc"),
+		},
+		{
+			name:      "non_ascii_no_match",
+			rules:     nonAsciiRules,
+			candidate: []byte("xyz123"),
+		},
+		{
+			name:      "no_constraints",
+			rules:     noConstraints,
+			candidate: []byte("anything goes here!@#"),
+		},
+		{
+			name:      "long_input_valid_match",
+			rules:     asciiRules,
+			candidate: []byte("prefix_abc123def_suffix_making_this_longer"),
+		},
+		{
+			name:      "long_input_no_match",
+			rules:     asciiRules,
+			candidate: []byte("prefix_###_suffix_making_this_longer_without_valid_chars"),
+		},
+	}
+
+	// Add large input test cases.
+	for _, size := range sizes {
+		// Valid match case - contains valid runs.
+		benchCases = append(benchCases, struct {
+			name      string
+			rules     DetectorPrefilterRules
+			candidate []byte
+		}{
+			name:      "large_input_valid_match_" + strconv.Itoa(size),
+			rules:     asciiRules,
+			candidate: makeTestData(size, validChars, invalidChars, 10),
+		})
+
+		// No match case - no valid runs long enough.
+		benchCases = append(benchCases, struct {
+			name      string
+			rules     DetectorPrefilterRules
+			candidate []byte
+		}{
+			name:      "large_input_no_match_" + strconv.Itoa(size),
+			rules:     asciiRules,
+			candidate: makeTestData(size, validChars, invalidChars, 2), // runs too short to match
+		})
+	}
+
+	for _, bc := range benchCases {
+		b.Run(bc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(bc.candidate)))
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = bc.rules.IsEligible(bc.candidate)
 			}
 		})
 	}
