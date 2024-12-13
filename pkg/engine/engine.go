@@ -722,11 +722,6 @@ func (e *Engine) Finish(ctx context.Context) error {
 	close(e.results)    // Detector workers are done, close the results channel and call it a day.
 	e.WgNotifier.Wait() // Wait for the notifier workers to finish notifying results.
 
-	fmt.Println("--------------------------------")
-	fmt.Println(detectorsMap)
-	fmt.Println("--------------------------------")
-	fmt.Println(totalCount.Load())
-
 	e.metrics.ScanDuration = time.Since(e.metrics.scanStartTime)
 
 	return err
@@ -1037,12 +1032,6 @@ func (e *Engine) detectorWorker(ctx context.Context) {
 	}
 }
 
-var (
-	detectorsMap = map[detectorspb.DetectorType]int{}
-	mu           sync.Mutex
-	totalCount   atomic.Int64
-)
-
 func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 	var start time.Time
 	if e.printAvgDetectorTime {
@@ -1068,10 +1057,6 @@ func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 			continue
 		}
 
-		totalCount.Add(1)
-		mu.Lock()
-		detectorsMap[data.detector.Type()]++
-		mu.Unlock()
 		matchCount++
 		detectBytesPerMatch.Observe(float64(len(matchBytes)))
 
