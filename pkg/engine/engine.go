@@ -13,6 +13,8 @@ import (
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/trufflesecurity/trufflehog/v3/pkg/bufferpool"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/config"
@@ -27,7 +29,6 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/source_metadatapb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/sourcespb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
-	"google.golang.org/protobuf/proto"
 )
 
 const detectionTimeout = 10 * time.Second
