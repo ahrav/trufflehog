@@ -11,6 +11,8 @@ replace github.com/snowflakedb/gosnowflake => github.com/trufflesecurity/gosnowf
 // Coinbase archived this library and it has some vulnerable dependencies so we've forked.
 replace github.com/coinbase/waas-client-library-go => github.com/trufflesecurity/waas-client-library-go v1.0.9
 
+replace github.com/BobuSumisu/aho-corasick => github.com/ahrav/aho-corasick v0.0.0-20241201043158-9e9eeba29bb9
+
 require (
 	cloud.google.com/go/secretmanager v1.14.2
 	cloud.google.com/go/storage v1.48.0

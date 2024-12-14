@@ -6,11 +6,11 @@ import (
 	"io"
 	"net/http"
 
-	regexp "github.com/wasilibs/go-re2"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
+	regexp "github.com/wasilibs/go-re2"
 )
 
 type Scanner struct {
@@ -32,6 +32,13 @@ var (
 	// ote environment
 	ote = "api.ote-godaddy.com"
 )
+
+func init() {
+	registry.RegisterConstraints(detectorspb.DetectorType_GoDaddy, registry.DetectorPrefilterRule{
+		MinLength:    22,
+		AllowedChars: common.UnionChars(common.AlphaNumericChars(), "_"),
+	})
+}
 
 func (s *Scanner) getClient() *http.Client {
 	if s.client != nil {
