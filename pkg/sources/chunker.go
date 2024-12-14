@@ -93,7 +93,6 @@ func createReaderFn(config *chunkReaderConfig) ChunkReader {
 	}
 }
 
-// Update readInChunks to use the global buffer pool
 func readInChunks(ctx context.Context, reader io.Reader, config *chunkReaderConfig) <-chan ChunkResult {
 	const channelSize = 64
 	chunkReader := bufio.NewReaderSize(reader, config.chunkSize)
