@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	ahocorasick "github.com/BobuSumisu/aho-corasick"
+
 	"github.com/trufflesecurity/trufflehog/v3/pkg/custom_detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
