@@ -547,7 +547,9 @@ func (s *SourceManager) runWithUnits(ctx context.Context, source SourceUnitEnumC
 	var unitPool errgroup.Group
 	if s.concurrentUnits != 0 {
 		// Negative values indicated no limit.
-		unitPool.SetLimit(s.concurrentUnits)
+		// TODO: Clean up this logic. Kinda annoying that this controls the concurrency
+		// for all sources :(
+		unitPool.SetLimit(s.concurrentUnits * 2)
 	}
 	for unit := range unitReporter.unitCh {
 		chunkReporter := &mgrChunkReporter{

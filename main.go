@@ -352,7 +352,6 @@ func isValidCommit(commit string) bool {
 }
 
 func run(state overseer.State) {
-
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
 

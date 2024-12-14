@@ -241,7 +241,7 @@ func (s *Source) ChunkUnit(ctx context.Context, unit sources.SourceUnit, reporte
 		return reporter.ChunkErr(ctx, fmt.Errorf("unable to get file info: %w", err))
 	}
 
-	ch := make(chan *sources.Chunk)
+	ch := make(chan *sources.Chunk, 1)
 	var scanErr error
 	go func() {
 		defer close(ch)
@@ -265,9 +265,10 @@ func (s *Source) ChunkUnit(ctx context.Context, unit sources.SourceUnit, reporte
 	}
 
 	if scanErr != nil && !errors.Is(scanErr, io.EOF) {
-		if !errors.Is(scanErr, skipSymlinkErr) {
-			logger.Error(scanErr, "error scanning filesystem")
+		if errors.Is(scanErr, skipSymlinkErr) {
+			return nil
 		}
+		logger.Error(scanErr, "error scanning filesystem")
 		return reporter.ChunkErr(ctx, scanErr)
 	}
 	return nil

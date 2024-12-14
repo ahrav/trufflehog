@@ -80,24 +80,38 @@ func newAdjustableSpanCalculator(offsetRadius int64) *adjustableSpanCalculator {
 func (m *adjustableSpanCalculator) calculateSpan(params spanCalculationParams) matchSpan {
 	keywordIdx := params.keywordIdx
 
-	maxSize := keywordIdx + m.offsetMagnitude
-	startOffset := keywordIdx - m.offsetMagnitude
+	// Default values.
+	forward := m.offsetMagnitude
+	backward := m.offsetMagnitude
 
-	// Check if the detector implements each interface and update values accordingly.
-	// This CAN'T be done in a switch statement because a detector can implement multiple interfaces.
+	// MultiPartCredentialProvider takes precedence and sets both forward and backward.
 	if provider, ok := params.detector.(detectors.MultiPartCredentialProvider); ok {
-		maxSize = provider.MaxCredentialSpan() + keywordIdx
-		startOffset = keywordIdx - provider.MaxCredentialSpan()
+		span := provider.MaxCredentialSpan()
+		forward = span
+		backward = span
+	} else {
+		// Only check MaxSecretSize if we're not a MultiPartCredentialProvider.
+		if provider, ok := params.detector.(detectors.MaxSecretSizeProvider); ok {
+			forward = provider.MaxSecretSize()
+			backward = forward // Use the same value for both directions.
+		}
 	}
-	if provider, ok := params.detector.(detectors.MaxSecretSizeProvider); ok {
-		maxSize = provider.MaxSecretSize() + keywordIdx
-	}
+
+	// Allow StartOffset to override the backward span if specified.
+	// This can avoid the situation where the start offset is greater than MaxSecretSize.
 	if provider, ok := params.detector.(detectors.StartOffsetProvider); ok {
-		startOffset = keywordIdx - provider.StartOffset()
+		backward = provider.StartOffset()
 	}
+
+	maxSize := keywordIdx + forward
+	startOffset := keywordIdx - backward
 
 	startIdx := max(startOffset, 0)
 	endIdx := min(maxSize, int64(len(params.chunkData)))
+
+	if endIdx < startIdx {
+		startIdx = 0
+	}
 
 	return matchSpan{startOffset: startIdx, endOffset: endIdx}
 }
