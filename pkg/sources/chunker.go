@@ -125,8 +125,6 @@ func readInChunks(ctx context.Context, reader io.Reader, config *chunkReaderConf
 			n, err := io.ReadFull(chunkReader, *chunkBytes)
 			if n > 0 {
 				peekData, _ := chunkReader.Peek(config.totalSize - n)
-				// (*chunkBytes) = (*chunkBytes)[:n+len(peekData)]
-				// copy((*chunkBytes)[n:], peekData)
 				(*chunkBytes) = append((*chunkBytes)[:n], peekData...)
 				chunkRes.data = *chunkBytes
 			} else {
