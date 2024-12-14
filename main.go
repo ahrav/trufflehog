@@ -20,8 +20,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/jpillora/overseer"
 	"github.com/mattn/go-isatty"
-	"go.uber.org/automaxprocs/maxprocs"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/analyzer"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/cleantemp"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
@@ -37,6 +35,7 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/tui"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/updater"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/version"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 var (
@@ -352,7 +351,6 @@ func isValidCommit(commit string) bool {
 }
 
 func run(state overseer.State) {
-
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
 

@@ -25,7 +25,8 @@ func (d *UTF16) FromChunk(chunk *sources.Chunk) *DecodableChunk {
 		if len(utf16Data) == 0 {
 			return nil
 		}
-		chunk.Data = utf16Data
+		data := utf16Data
+		chunk.Data = data
 		return decodableChunk
 	}
 

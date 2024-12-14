@@ -13,8 +13,7 @@ import (
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"google.golang.org/protobuf/proto"
-
+	"github.com/trufflesecurity/trufflehog/v3/pkg/bufferpool"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/config"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
@@ -28,6 +27,7 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/source_metadatapb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/sourcespb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
+	"google.golang.org/protobuf/proto"
 )
 
 const detectionTimeout = 10 * time.Second
@@ -803,6 +803,7 @@ func (e *Engine) scannerWorker(ctx context.Context) {
 		}
 
 		dataSize := float64(len(chunk.Data))
+		bufferpool.ReturnBuffer(&chunk.Data)
 
 		scanBytesPerChunk.Observe(dataSize)
 		jobBytesScanned.WithLabelValues(
@@ -1151,6 +1152,8 @@ func (e *Engine) processResult(
 		}
 		data.chunk = copyChunk
 	}
+	bufferpool.ReturnBuffer(&data.chunk.Data)
+
 	if ignoreLinePresent {
 		return
 	}

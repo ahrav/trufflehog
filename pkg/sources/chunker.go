@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/trufflesecurity/trufflehog/v3/pkg/bufferpool"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
 )
 
 const (
 	// ChunkSize is the maximum size of a chunk.
-	ChunkSize = 10 * 1024
+	ChunkSize = 29 * 1024
 	// PeekSize is the size of the peek into the previous chunk.
 	PeekSize = 3 * 1024
 	// TotalChunkSize is the total size of a chunk with peek data.
-	TotalChunkSize = ChunkSize + PeekSize
+	TotalChunkSize = ChunkSize + PeekSize // 32KB
 )
 
 type chunkReaderConfig struct {
@@ -92,6 +93,7 @@ func createReaderFn(config *chunkReaderConfig) ChunkReader {
 	}
 }
 
+// Update readInChunks to use the global buffer pool
 func readInChunks(ctx context.Context, reader io.Reader, config *chunkReaderConfig) <-chan ChunkResult {
 	const channelSize = 64
 	chunkReader := bufio.NewReaderSize(reader, config.chunkSize)
@@ -118,13 +120,17 @@ func readInChunks(ctx context.Context, reader io.Reader, config *chunkReaderConf
 
 		for {
 			chunkRes := ChunkResult{}
-			chunkBytes := make([]byte, config.totalSize)
-			chunkBytes = chunkBytes[:config.chunkSize]
-			n, err := io.ReadFull(chunkReader, chunkBytes)
+			chunkBytes := bufferpool.GetBuffer(config.totalSize)
+			(*chunkBytes) = (*chunkBytes)[:config.chunkSize]
+			n, err := io.ReadFull(chunkReader, *chunkBytes)
 			if n > 0 {
 				peekData, _ := chunkReader.Peek(config.totalSize - n)
-				chunkBytes = append(chunkBytes[:n], peekData...)
-				chunkRes.data = chunkBytes
+				// (*chunkBytes) = (*chunkBytes)[:n+len(peekData)]
+				// copy((*chunkBytes)[n:], peekData)
+				(*chunkBytes) = append((*chunkBytes)[:n], peekData...)
+				chunkRes.data = *chunkBytes
+			} else {
+				bufferpool.ReturnBuffer(chunkBytes) // Return buffer if not used
 			}
 
 			// If there is an error other than EOF, or if we have read some bytes, send the chunk.
@@ -132,6 +138,7 @@ func readInChunks(ctx context.Context, reader io.Reader, config *chunkReaderConf
 			switch {
 			case isErrAndNotEOF(err):
 				ctx.Logger().Error(err, "error reading chunk")
+				bufferpool.ReturnBuffer(chunkBytes)
 				chunkRes.err = err
 			case n > 0:
 				chunkRes.err = nil

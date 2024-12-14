@@ -9,10 +9,6 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/go-logr/logr"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/handlers"
@@ -20,6 +16,9 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/sourcespb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sanitizer"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const SourceType = sourcespb.SourceType_SOURCE_TYPE_FILESYSTEM
@@ -241,7 +240,7 @@ func (s *Source) ChunkUnit(ctx context.Context, unit sources.SourceUnit, reporte
 		return reporter.ChunkErr(ctx, fmt.Errorf("unable to get file info: %w", err))
 	}
 
-	ch := make(chan *sources.Chunk)
+	ch := make(chan *sources.Chunk, 1)
 	var scanErr error
 	go func() {
 		defer close(ch)
@@ -265,9 +264,10 @@ func (s *Source) ChunkUnit(ctx context.Context, unit sources.SourceUnit, reporte
 	}
 
 	if scanErr != nil && !errors.Is(scanErr, io.EOF) {
-		if !errors.Is(scanErr, skipSymlinkErr) {
-			logger.Error(scanErr, "error scanning filesystem")
+		if errors.Is(scanErr, skipSymlinkErr) {
+			return nil
 		}
+		logger.Error(scanErr, "error scanning filesystem")
 		return reporter.ChunkErr(ctx, scanErr)
 	}
 	return nil

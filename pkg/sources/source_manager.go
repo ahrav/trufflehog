@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"github.com/marusama/semaphore/v2"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/context"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/sourcespb"
+	"golang.org/x/sync/errgroup"
 )
 
 // SourceManager provides an interface for starting and managing running
@@ -547,7 +546,7 @@ func (s *SourceManager) runWithUnits(ctx context.Context, source SourceUnitEnumC
 	var unitPool errgroup.Group
 	if s.concurrentUnits != 0 {
 		// Negative values indicated no limit.
-		unitPool.SetLimit(s.concurrentUnits)
+		unitPool.SetLimit(s.concurrentUnits * 2)
 	}
 	for unit := range unitReporter.unitCh {
 		chunkReporter := &mgrChunkReporter{
