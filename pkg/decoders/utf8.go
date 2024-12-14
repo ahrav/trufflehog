@@ -22,8 +22,7 @@ func (d *UTF8) FromChunk(chunk *sources.Chunk) *DecodableChunk {
 	decodableChunk := &DecodableChunk{Chunk: chunk, DecoderType: d.Type()}
 
 	if !utf8.Valid(chunk.Data) {
-		data := extractSubstrings(chunk.Data)
-		chunk.Data = data
+		chunk.Data = extractSubstrings(chunk.Data)
 		return decodableChunk
 	}
 

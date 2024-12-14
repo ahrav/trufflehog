@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	ahocorasick "github.com/BobuSumisu/aho-corasick"
+
 	"github.com/trufflesecurity/trufflehog/v3/pkg/custom_detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
@@ -79,20 +80,20 @@ func newAdjustableSpanCalculator(offsetRadius int64) *adjustableSpanCalculator {
 func (m *adjustableSpanCalculator) calculateSpan(params spanCalculationParams) matchSpan {
 	keywordIdx := params.keywordIdx
 
-	// Default values
+	// Default values.
 	forward := m.offsetMagnitude
 	backward := m.offsetMagnitude
 
-	// MultiPartCredentialProvider takes precedence and sets both forward and backward
+	// MultiPartCredentialProvider takes precedence and sets both forward and backward.
 	if provider, ok := params.detector.(detectors.MultiPartCredentialProvider); ok {
 		span := provider.MaxCredentialSpan()
 		forward = span
 		backward = span
 	} else {
-		// Only check MaxSecretSize if we're not a MultiPartCredentialProvider
+		// Only check MaxSecretSize if we're not a MultiPartCredentialProvider.
 		if provider, ok := params.detector.(detectors.MaxSecretSizeProvider); ok {
 			forward = provider.MaxSecretSize()
-			backward = forward // Use the same value for both directions
+			backward = forward // Use the same value for both directions.
 		}
 	}
 
