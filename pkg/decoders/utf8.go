@@ -3,6 +3,7 @@ package decoders
 import (
 	"unicode/utf8"
 
+	"github.com/trufflesecurity/trufflehog/v3/pkg/bufferpool"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
 )
@@ -44,15 +45,15 @@ var utf8ReplacementBytes = []byte(string(utf8.RuneError))
 // are replaced with a single UTF-8 replacement character.
 func extractSubstrings(b []byte) []byte {
 	dataLen := len(b)
-	buf := make([]byte, 0, dataLen)
+	buf := bufferpool.GetBuffer(dataLen)
 	for idx := 0; idx < dataLen; {
 		// If it's ASCII, handle separately.
 		// This is faster than decoding for common cases.
 		if b[idx] < utf8.RuneSelf {
 			if isPrintableByte(b[idx]) {
-				buf = append(buf, b[idx])
+				(*buf) = append((*buf), b[idx])
 			} else {
-				buf = append(buf, utf8ReplacementBytes...)
+				(*buf) = append((*buf), utf8ReplacementBytes...)
 			}
 			idx++
 			continue
@@ -62,16 +63,16 @@ func extractSubstrings(b []byte) []byte {
 		if r == utf8.RuneError {
 			// Collapse any malformed sequence into a single replacement character
 			// rather than replacing each byte individually.
-			buf = append(buf, utf8ReplacementBytes...)
+			(*buf) = append((*buf), utf8ReplacementBytes...)
 			idx++
 		} else {
 			// Keep valid multi-byte UTF-8 sequences intact to preserve unicode characters.
-			buf = append(buf, b[idx:idx+size]...)
+			(*buf) = append((*buf), b[idx:idx+size]...)
 			idx += size
 		}
 	}
 
-	return buf
+	return *buf
 }
 
 // isPrintableByte reports whether a byte represents a printable ASCII character
