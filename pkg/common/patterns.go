@@ -69,3 +69,48 @@ func PasswordRegexCheck(pattern string) RegexState {
 
 	return RegexState{regexp.MustCompile(raw)}
 }
+
+// AlphaNumericChars returns a string of allowed alphanumeric chars [a-zA-Z0-9].
+func AlphaNumericChars() string {
+	var sb strings.Builder
+	sb.Grow(62)
+	for c := 'a'; c <= 'z'; c++ {
+		sb.WriteRune(c)
+	}
+	for c := 'A'; c <= 'Z'; c++ {
+		sb.WriteRune(c)
+	}
+	for c := '0'; c <= '9'; c++ {
+		sb.WriteRune(c)
+	}
+	return sb.String()
+}
+
+// HexChars returns characters a-f0-9, commonly used for hex patterns.
+func HexChars() string {
+	var sb strings.Builder
+	sb.Grow(16)
+	for c := 'a'; c <= 'f'; c++ {
+		sb.WriteRune(c)
+	}
+	for c := '0'; c <= '9'; c++ {
+		sb.WriteRune(c)
+	}
+	return sb.String()
+}
+
+// UnionChars takes multiple strings of characters and returns a string with unique characters combined.
+// This ensures allowed characters from all patterns are merged without duplicates.
+func UnionChars(sets ...string) string {
+	seen := make(map[rune]bool)
+	var sb strings.Builder
+	for _, set := range sets {
+		for _, r := range set {
+			if !seen[r] {
+				seen[r] = true
+				sb.WriteRune(r)
+			}
+		}
+	}
+	return sb.String()
+}

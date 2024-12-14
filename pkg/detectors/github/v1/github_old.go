@@ -11,6 +11,7 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
 )
 
 type Scanner struct{ detectors.EndpointSetter }
@@ -32,6 +33,13 @@ var (
 	// TODO: Oauth2 client_id and client_secret
 	// https://developer.github.com/v3/#oauth2-keysecret
 )
+
+func init() {
+	registry.RegisterConstraints(detectorspb.DetectorType_Github, registry.DetectorPrefilterRule{
+		MinLength:    40,
+		AllowedChars: common.UnionChars(common.AlphaNumericChars(), `-_:.'"`),
+	})
+}
 
 // TODO: Add secret context?? Information about access, ownership etc
 type UserRes struct {

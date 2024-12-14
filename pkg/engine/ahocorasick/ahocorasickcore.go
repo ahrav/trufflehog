@@ -2,7 +2,9 @@ package ahocorasick
 
 import (
 	"bytes"
+	"slices"
 	"strings"
+	"sync"
 
 	ahocorasick "github.com/BobuSumisu/aho-corasick"
 
@@ -200,25 +202,29 @@ func (d *DetectorMatch) addMatchSpan(spans ...matchSpan) {
 // mergeMatches merges overlapping or adjacent matchSpans into a single matchSpan.
 // It updates the matchSpans field with the merged spans.
 func (d *DetectorMatch) mergeMatches() {
-	if len(d.matchSpans) <= 1 {
+	matchSpansCount := len(d.matchSpans)
+	if matchSpansCount <= 1 {
 		return
 	}
 
-	merged := make([]matchSpan, 0, len(d.matchSpans))
-	current := d.matchSpans[0]
+	slices.SortFunc(d.matchSpans, func(a, b matchSpan) int {
+		return int(a.startOffset - b.startOffset)
+	})
 
-	for i := 1; i < len(d.matchSpans); i++ {
+	merged := d.matchSpans[:1]
+	current := &merged[0]
+
+	for i := 1; i < matchSpansCount; i++ {
 		if d.matchSpans[i].startOffset <= current.endOffset {
 			if d.matchSpans[i].endOffset > current.endOffset {
 				current.endOffset = d.matchSpans[i].endOffset
 			}
 			continue
 		}
-		merged = append(merged, current)
-		current = d.matchSpans[i]
+		merged = append(merged, d.matchSpans[i])
+		current = &merged[len(merged)-1]
 	}
 
-	merged = append(merged, current)
 	d.matchSpans = merged
 }
 
@@ -233,6 +239,18 @@ func (d *DetectorMatch) extractMatches(chunkData []byte) {
 // Matches returns a slice of byte slices, each representing a matched portion of the chunk data.
 func (d *DetectorMatch) Matches() [][]byte { return d.matches }
 
+func (d *DetectorMatch) cleanup() {
+	d.matchSpans = d.matchSpans[:0]
+	matchSpansPool.Put(d.matchSpans)
+	d.matchSpans = nil
+}
+
+var matchSpansPool = sync.Pool{
+	New: func() any {
+		return make([]matchSpan, 0, 4)
+	},
+}
+
 // FindDetectorMatches finds the matching detectors for a given chunk of data using the Aho-Corasick algorithm.
 // It returns a slice of DetectorMatch instances, each containing the detector key, detector,
 // a slice of matchSpans, and the corresponding matched portions of the chunk data.
@@ -246,6 +264,7 @@ func (d *DetectorMatch) Matches() [][]byte { return d.matches }
 // The matches field contains the actual byte slices of the matched portions from the chunk data.
 func (ac *Core) FindDetectorMatches(chunkData []byte) []*DetectorMatch {
 	matches := ac.prefilter.Match(bytes.ToLower(chunkData))
+	defer ac.prefilter.ReleaseMatches(matches)
 
 	matchCount := len(matches)
 	if matchCount == 0 {
@@ -255,21 +274,23 @@ func (ac *Core) FindDetectorMatches(chunkData []byte) []*DetectorMatch {
 	detectorMatches := make(map[DetectorKey]*DetectorMatch)
 
 	for _, m := range matches {
-		for _, k := range ac.keywordsToDetectors[m.MatchString()] {
-			if _, exists := detectorMatches[k]; !exists {
+		detectors := ac.keywordsToDetectors[m.MatchString()]
+		for _, k := range detectors {
+			detectorMatch, exists := detectorMatches[k]
+			if !exists {
 				detector := ac.detectorsByKey[k]
-				detectorMatches[k] = &DetectorMatch{
+				detectorMatch = &DetectorMatch{
 					Key:        k,
 					Detector:   detector,
-					matchSpans: make([]matchSpan, 0),
+					matchSpans: matchSpansPool.Get().([]matchSpan),
 				}
+				detectorMatches[k] = detectorMatch
 			}
 
-			detectorMatch := detectorMatches[k]
 			startIdx := m.Pos()
 			span := ac.spanCalculator.calculateSpan(
 				spanCalculationParams{
-					keywordIdx: startIdx,
+					keywordIdx: int64(startIdx),
 					chunkData:  chunkData,
 					detector:   detectorMatch.Detector,
 				},
@@ -283,6 +304,7 @@ func (ac *Core) FindDetectorMatches(chunkData []byte) []*DetectorMatch {
 		// Merge overlapping or adjacent match spans.
 		detectorMatch.mergeMatches()
 		detectorMatch.extractMatches(chunkData)
+		detectorMatch.cleanup()
 
 		uniqueDetectors = append(uniqueDetectors, detectorMatch)
 	}
