@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 )
@@ -12,13 +13,6 @@ import (
 // HTTPVerifier provides a reusable way to verify credentials by making HTTP requests.
 // It handles common verification patterns like checking status codes and allows
 // customization of request preparation and response validation.
-//
-// Timeout and cancellation control should be handled by the provided context when
-// calling Verify. For example:
-//
-//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-//	defer cancel()
-//	valid, err := verifier.Verify(ctx, candidate)
 type HTTPVerifier struct {
 	endpoint         string
 	method           string
@@ -26,6 +20,9 @@ type HTTPVerifier struct {
 	client           *http.Client
 	prepareRequest   func(ctx context.Context, c Candidate) (*http.Request, error)
 	validateResponse func(resp *http.Response) (bool, error)
+
+	// timeout specifies a maximum duration for verification requests.
+	timeout time.Duration
 }
 
 // HTTPVerifierConfig configures how the HTTPVerifier makes requests and validates responses.
@@ -53,6 +50,12 @@ type HTTPVerifierConfig struct {
 	// ValidateResponse determines if a response indicates valid credentials.
 	// When not set, DefaultResponseValidator is used.
 	ValidateResponse func(resp *http.Response) (bool, error)
+
+	// Timeout specifies the maximum duration for a verification request.
+	// This timeout is enforced independently of any deadline on the context passed to Verify.
+	// When both are set, the shorter duration will be used.
+	// If neither are set, requests may hang indefinitely.
+	Timeout time.Duration
 }
 
 // NewHTTPVerifier creates a new HTTPVerifier with the given configuration.
@@ -76,6 +79,7 @@ func NewHTTPVerifier(config HTTPVerifierConfig) Verifier {
 		client:           config.Client,
 		prepareRequest:   config.PrepareRequest,
 		validateResponse: config.ValidateResponse,
+		timeout:          config.Timeout,
 	}
 }
 
@@ -94,10 +98,17 @@ func DefaultResponseValidator(resp *http.Response) (bool, error) {
 }
 
 // Verify implements the Verifier interface by making an HTTP request with the candidate
-// credentials and validating the response.
-// The provided context should be used to set timeouts and handle cancellation.
-// If no timeout is set in the context, the request may block indefinitely.
+// credentials and validating the response. If a timeout was configured on the verifier,
+// it will be enforced independently of any deadline on the provided context. When both
+// a verifier timeout and context deadline are set, the shorter duration will be used.
+// If neither are set, the request may hang indefinitely.
 func (v *HTTPVerifier) Verify(ctx context.Context, c Candidate) (bool, error) {
+	if v.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, v.timeout)
+		defer cancel()
+	}
+
 	var req *http.Request
 	var err error
 

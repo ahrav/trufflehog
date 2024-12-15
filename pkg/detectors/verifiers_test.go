@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -197,6 +198,34 @@ func TestHTTPVerifierCustomPrepareRequest(t *testing.T) {
 	})
 
 	valid, err := v.Verify(context.Background(), Candidate{})
+	assert.NoError(t, err)
+	assert.True(t, valid)
+}
+
+func TestHTTPVerifierTimeout(t *testing.T) {
+	const defaultTimeout = 5 * time.Millisecond
+	// Create a server that delays before responding.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(defaultTimeout) // Artificial delay
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	v := NewHTTPVerifier(HTTPVerifierConfig{Endpoint: server.URL})
+
+	// Test with a timeout less than the server delay.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout/2)
+	defer cancel()
+
+	_, err := v.Verify(ctx, Candidate{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+
+	// Test with a timeout greater than the server delay.
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTimeout*2)
+	defer cancel()
+
+	valid, err := v.Verify(ctx, Candidate{})
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
