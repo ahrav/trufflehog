@@ -1583,7 +1583,7 @@ func buildDetectorList() []detectors.Detector {
 		&twelvedata.Scanner{},
 		&twilio.Scanner{},
 		&twist.Scanner{},
-		&twitch.Scanner{},
+		twitch.NewDetector(),
 		&twitchaccesstoken.Scanner{},
 		&twitterconsumerkey.Scanner{},
 		&twitterv1.Scanner{},

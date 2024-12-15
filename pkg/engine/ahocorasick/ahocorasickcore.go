@@ -91,11 +91,22 @@ func (m *adjustableSpanCalculator) calculateSpan(params spanCalculationParams) m
 		span := provider.MaxCredentialSpan()
 		forward = span
 		backward = span
+	} else if pbd, ok := params.detector.(detectors.PatternBasedDetector); ok {
+		if provider, ok := pbd.Detector.(detectors.MultiPartCredentialProvider); ok {
+			span := provider.MaxCredentialSpan()
+			forward = span
+			backward = span
+		}
 	} else {
-		// Only check MaxSecretSize if we're not a MultiPartCredentialProvider.
+		// Only check MaxSecretSize if we're not a MultiPartCredentialProvider
 		if provider, ok := params.detector.(detectors.MaxSecretSizeProvider); ok {
 			forward = provider.MaxSecretSize()
 			backward = forward // Use the same value for both directions.
+		} else if pbd, ok := params.detector.(detectors.PatternBasedDetector); ok {
+			if provider, ok := pbd.Detector.(detectors.MaxSecretSizeProvider); ok {
+				forward = provider.MaxSecretSize()
+				backward = forward
+			}
 		}
 	}
 
@@ -103,6 +114,10 @@ func (m *adjustableSpanCalculator) calculateSpan(params spanCalculationParams) m
 	// This can avoid the situation where the start offset is greater than MaxSecretSize.
 	if provider, ok := params.detector.(detectors.StartOffsetProvider); ok {
 		backward = provider.StartOffset()
+	} else if pbd, ok := params.detector.(detectors.PatternBasedDetector); ok {
+		if provider, ok := pbd.Detector.(detectors.StartOffsetProvider); ok {
+			backward = provider.StartOffset()
+		}
 	}
 
 	maxSize := keywordIdx + forward

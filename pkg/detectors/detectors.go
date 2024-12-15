@@ -16,6 +16,8 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
 )
 
+// Candidate represents a potential secret that has been detected but not yet verified.
+// It contains both the raw secret data and metadata about the detection.
 type Candidate struct {
 	Raw       []byte
 	RawV2     []byte
@@ -23,6 +25,8 @@ type Candidate struct {
 	ExtraData map[string]string
 }
 
+// toResult converts a Candidate into a Result by adding the detector type.
+// This is used internally when a detector needs to return its findings.
 func (c Candidate) toResult(dt detectorspb.DetectorType) Result {
 	return Result{
 		DetectorType: dt,
@@ -33,13 +37,24 @@ func (c Candidate) toResult(dt detectorspb.DetectorType) Result {
 	}
 }
 
+// PatternDetector defines the interface for secret detection logic.
+// Implementations of this interface handle the pattern matching and extraction
+// of candidates.
 type PatternDetector interface {
+	// FindCandidates scans the input data and returns any candidates found.
 	FindCandidates(ctx context.Context, data []byte) ([]Candidate, error)
+	// Type returns the specific type of detector (e.g. AWS, GitHub, etc).
 	Type() detectorspb.DetectorType
+	// Description returns human-readable information about what this detector looks for.
 	Description() string
 }
 
+// Verifier defines the interface for secret verification logic.
+// Implementations handle validating whether a detected secret is valid
+// by making API calls or other verification steps. (eg db connection)
 type Verifier interface {
+	// Verify checks if a candidate secret is valid and currently active.
+	// Returns true if the secret is verified as valid.
 	Verify(ctx context.Context, candidate Candidate) (bool, error)
 }
 
@@ -64,19 +79,19 @@ type Detector interface {
 // This is a temporary adapter to help with the transition to the new detector interface.
 // It will be removed once all detectors have been updated to the new interface.
 type PatternBasedDetector struct {
-	patternDetector PatternDetector
-	verifier        Verifier
-	keywords        []string
+	Detector    PatternDetector
+	Verifier    Verifier
+	KeywordList []string
 }
 
 // Keywords returns the keywords for the detector.
-func (p PatternBasedDetector) Keywords() []string { return p.keywords }
+func (p PatternBasedDetector) Keywords() []string { return p.KeywordList }
 
 // Type returns the DetectorType number from detectors.proto for the given detector.
-func (p PatternBasedDetector) Type() detectorspb.DetectorType { return p.patternDetector.Type() }
+func (p PatternBasedDetector) Type() detectorspb.DetectorType { return p.Detector.Type() }
 
 // Description returns a description for the result being detected
-func (p PatternBasedDetector) Description() string { return p.patternDetector.Description() }
+func (p PatternBasedDetector) Description() string { return p.Detector.Description() }
 
 // FromData will scan bytes for results, and optionally verify them.
 // This is the old Detector interface's FromData method.
@@ -87,15 +102,15 @@ func (p PatternBasedDetector) FromData(ctx context.Context, verify bool, data []
 	}
 
 	var finalResults []Result
-	detectedCandidates, err := p.patternDetector.FindCandidates(ctx, data)
+	detectedCandidates, err := p.Detector.FindCandidates(ctx, data)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, c := range detectedCandidates {
-		res := c.toResult(p.patternDetector.Type())
+		res := c.toResult(p.Detector.Type())
 		if verify {
-			ok, verr := p.verifier.Verify(ctx, c)
+			ok, verr := p.Verifier.Verify(ctx, c)
 			if verr != nil {
 				res.SetVerificationError(verr, string(c.Raw))
 			}
