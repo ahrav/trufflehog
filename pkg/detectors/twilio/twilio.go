@@ -30,7 +30,7 @@ var (
 )
 
 func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_Twilio, registry.DetectorPrefilterRule{
+	registry.RegisterConstraints(detectorspb.DetectorType_Twilio, registry.DetectorPrefilterConfig{
 		MinLength:    32,
 		AllowedChars: common.UnionChars(common.HexChars()),
 	})

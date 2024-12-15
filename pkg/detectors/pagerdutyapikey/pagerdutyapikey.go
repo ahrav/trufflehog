@@ -30,7 +30,7 @@ var (
 )
 
 func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_PagerDutyApiKey, registry.DetectorPrefilterRule{
+	registry.RegisterConstraints(detectorspb.DetectorType_PagerDutyApiKey, registry.DetectorPrefilterConfig{
 		MinLength:    20,
 		AllowedChars: common.UnionChars(common.AlphaNumericChars(), "_+-"),
 	})

@@ -3,9 +3,9 @@
 // that can be used to quickly filter out invalid matches before running more expensive
 // regex checks.
 //
-// Detectors can supply a set of rules (via DetectorPrefilterRule) that specify criteria
+// Detectors can supply a set of rules (via DetectorPrefilterConfig) that specify criteria
 // such as minimum/maximum length, allowed characters, and optional prefixes. At runtime,
-// the scanning engine retrieves these rules (as DetectorPrefilterRules) and applies them
+// the scanning engine retrieves these rules (as DetectorPrefilterCriteria) and applies them
 // to candidate substrings before delegating to the actual detector logic.
 // This approach reduces overhead by quickly filtering out invalid candidates.
 package registry
@@ -48,13 +48,13 @@ func makeASCIISet(chars string) (as asciiSet, ok bool) {
 	return as, true
 }
 
-// DetectorPrefilterRule defines a simple structure for authors of detectors to specify
+// DetectorPrefilterConfig defines a simple structure for authors of detectors to specify
 // basic filtering criteria. These criteria help quickly eliminate candidates that
 // cannot possibly match the detector's target secret format.
 //
 // All fields are optional. If a field is zero or empty, it imposes no corresponding
 // constraint.
-type DetectorPrefilterRule struct {
+type DetectorPrefilterConfig struct {
 	MinLength int // Minimum length of the candidate
 	// MaxLength is the maximum number of characters the candidate can have.
 	// Use 0 to indicate no upper bound.
@@ -65,10 +65,10 @@ type DetectorPrefilterRule struct {
 	AllowedChars string
 }
 
-// DetectorPrefilterRules represents an optimized, runtime-ready version of the rules
-// defined by DetectorPrefilterRule. It is derived from DetectorPrefilterRule during registration.
+// DetectorPrefilterCriteria represents an optimized, runtime-ready version of the rules
+// defined by DetectorPrefilterConfig. It is derived from DetectorPrefilterConfig during registration.
 // Internal fields are structured for fast validation of candidates.
-type DetectorPrefilterRules struct {
+type DetectorPrefilterCriteria struct {
 	// MinLength is the minimum length a candidate must have.
 	MinLength int
 	// MaxLength is the maximum length a candidate can have.
@@ -85,13 +85,13 @@ type DetectorPrefilterRules struct {
 	allowedMap map[rune]bool
 }
 
-// IsEligible checks whether the candidate meets all the detector prefilter rules.
+// Matches checks whether the candidate meets all the detector prefilter rules.
 // It returns true if the candidate satisfies all rules (length, prefix, allowed characters),
 // or if no constraints are defined. Otherwise, it returns false.
 //
-// IsEligible is typically called by the scanning engine before running more expensive
+// Matches is typically called by the scanning engine before running more expensive
 // detection logic, such as regex evaluation or API verification.
-func (c DetectorPrefilterRules) IsEligible(candidate []byte) bool {
+func (c DetectorPrefilterCriteria) Matches(candidate []byte) bool {
 	// If no length constraints are defined, we treat it as no minimum required.
 	// For a credential, typically at least one of MinLength or MaxLength is set.
 	minLen := c.MinLength
@@ -131,7 +131,7 @@ func (c DetectorPrefilterRules) IsEligible(candidate []byte) bool {
 
 // charAllowed checks if a single character is allowed by the constraints.
 // This encapsulates logic for ASCII or map checks.
-func (c DetectorPrefilterRules) charAllowed(ch rune) bool {
+func (c DetectorPrefilterCriteria) charAllowed(ch rune) bool {
 	if c.asciiOnly {
 		// ASCII fast path.
 		return ch < utf8.RuneSelf && c.allowedASCII.contains(byte(ch))
@@ -145,7 +145,7 @@ func (c DetectorPrefilterRules) charAllowed(ch rune) bool {
 
 // checkAllChars verifies that all characters in candidate are allowed without
 // enforcing any length-run logic. This is used if no length constraints are provided.
-func (c DetectorPrefilterRules) checkAllChars(candidate []byte) bool {
+func (c DetectorPrefilterCriteria) checkAllChars(candidate []byte) bool {
 	for _, ch := range candidate {
 		if !c.charAllowed(rune(ch)) {
 			return false
@@ -156,14 +156,14 @@ func (c DetectorPrefilterRules) checkAllChars(candidate []byte) bool {
 
 // detectorConstraints stores registered constraints for each DetectorType.
 // By default, detectors may not have constraints, and thus won't be filtered.
-var detectorConstraints = map[detectorspb.DetectorType]DetectorPrefilterRules{}
+var detectorConstraints = map[detectorspb.DetectorType]DetectorPrefilterCriteria{}
 
 // RegisterConstraints allows detectors to register pre-check rules at startup.
-// It takes a DetectorPrefilterRule as input and transforms it into optimized DetectorPrefilterRules.
+// It takes a DetectorPrefilterConfig as input and transforms it into optimized DetectorPrefilterCriteria.
 // This function should be called from an init function or a similar initialization block
 // once per detector type.
-func RegisterConstraints(dt detectorspb.DetectorType, rule DetectorPrefilterRule) {
-	c := DetectorPrefilterRules{
+func RegisterConstraints(dt detectorspb.DetectorType, rule DetectorPrefilterConfig) {
+	c := DetectorPrefilterCriteria{
 		MinLength: rule.MinLength,
 		MaxLength: rule.MaxLength,
 	}
@@ -186,11 +186,11 @@ func RegisterConstraints(dt detectorspb.DetectorType, rule DetectorPrefilterRule
 	detectorConstraints[dt] = c
 }
 
-// GetConstraints returns the DetectorPrefilterRules associated with a DetectorType.
+// GetConstraints returns the DetectorPrefilterCriteria associated with a DetectorType.
 // If no constraints are registered for the given type, found will be false.
 //
 // The scanning engine uses this function to retrieve constraints before validating candidates.
-func GetConstraints(dt detectorspb.DetectorType) (c DetectorPrefilterRules, found bool) {
+func GetConstraints(dt detectorspb.DetectorType) (c DetectorPrefilterCriteria, found bool) {
 	c, found = detectorConstraints[dt]
 	return
 }

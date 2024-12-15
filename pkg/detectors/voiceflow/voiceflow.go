@@ -33,7 +33,7 @@ var (
 )
 
 func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_Voiceflow, registry.DetectorPrefilterRule{
+	registry.RegisterConstraints(detectorspb.DetectorType_Voiceflow, registry.DetectorPrefilterConfig{
 		MinLength:    40,
 		AllowedChars: common.AlphaNumericChars(),
 	})

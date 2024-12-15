@@ -12,13 +12,13 @@ import (
 func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 	tests := []struct {
 		name       string
-		rules      DetectorPrefilterRules
+		rules      DetectorPrefilterCriteria
 		candidate  []byte
 		wantResult bool
 	}{
 		{
 			name: "length constraints - valid run in middle",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				MinLength:    3,
 				MaxLength:    5,
 				asciiOnly:    true,
@@ -29,7 +29,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "length constraints - no valid run",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				MinLength:    3,
 				MaxLength:    5,
 				asciiOnly:    true,
@@ -40,7 +40,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "max length only - treated as min length",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				MaxLength:    3,
 				asciiOnly:    true,
 				allowedASCII: func() asciiSet { set, _ := makeASCIISet("123"); return set }(),
@@ -50,7 +50,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "no length constraints - all chars must be valid",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				asciiOnly:    true,
 				allowedASCII: func() asciiSet { set, _ := makeASCIISet("123"); return set }(),
 			},
@@ -59,7 +59,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "no length constraints - one invalid char",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				asciiOnly:    true,
 				allowedASCII: func() asciiSet { set, _ := makeASCIISet("123"); return set }(),
 			},
@@ -68,7 +68,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "ascii chars - valid run with surrounding invalid chars",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				MinLength:    3,
 				asciiOnly:    true,
 				allowedASCII: func() asciiSet { set, _ := makeASCIISet("abc123"); return set }(),
@@ -78,7 +78,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "non-ascii chars - valid run",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				MinLength:  3,
 				asciiOnly:  false,
 				allowedMap: map[rune]bool{'α': true, 'β': true, '∆': true, 'x': true},
@@ -88,7 +88,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name: "non-ascii chars - longer valid run",
-			rules: DetectorPrefilterRules{
+			rules: DetectorPrefilterCriteria{
 				MinLength:  3,
 				asciiOnly:  false,
 				allowedMap: map[rune]bool{'a': true, 'b': true, '1': true, 'x': true, '∆': true},
@@ -98,7 +98,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 		},
 		{
 			name:       "no constraints",
-			rules:      DetectorPrefilterRules{},
+			rules:      DetectorPrefilterCriteria{},
 			candidate:  []byte("anything"),
 			wantResult: true,
 		},
@@ -106,7 +106,7 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.rules.IsEligible(tt.candidate)
+			got := tt.rules.Matches(tt.candidate)
 			assert.Equal(t, tt.wantResult, got, "IsEligible() failed for test case %s", tt.name)
 		})
 	}
@@ -116,7 +116,7 @@ func TestRegisterAndGetConstraints(t *testing.T) {
 	tests := []struct {
 		name           string
 		detectorType   detectorspb.DetectorType
-		rule           DetectorPrefilterRule
+		rule           DetectorPrefilterConfig
 		wantFound      bool
 		checkCandidate []byte
 		wantEligible   bool
@@ -124,7 +124,7 @@ func TestRegisterAndGetConstraints(t *testing.T) {
 		{
 			name:         "basic registration",
 			detectorType: detectorspb.DetectorType_AWS,
-			rule: DetectorPrefilterRule{
+			rule: DetectorPrefilterConfig{
 				MinLength:    5,
 				MaxLength:    10,
 				AllowedChars: "abc123",
@@ -141,7 +141,7 @@ func TestRegisterAndGetConstraints(t *testing.T) {
 		{
 			name:           "empty rule",
 			detectorType:   detectorspb.DetectorType_AWS,
-			rule:           DetectorPrefilterRule{},
+			rule:           DetectorPrefilterConfig{},
 			wantFound:      true,
 			checkCandidate: []byte("anything"),
 			wantEligible:   true,
@@ -151,7 +151,7 @@ func TestRegisterAndGetConstraints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear any existing constraints.
-			detectorConstraints = map[detectorspb.DetectorType]DetectorPrefilterRules{}
+			detectorConstraints = map[detectorspb.DetectorType]DetectorPrefilterCriteria{}
 
 			if tt.wantFound {
 				RegisterConstraints(tt.detectorType, tt.rule)
@@ -161,7 +161,7 @@ func TestRegisterAndGetConstraints(t *testing.T) {
 			assert.Equal(t, tt.wantFound, found, "failed to get constraints")
 
 			if found && tt.checkCandidate != nil {
-				got := rules.IsEligible(tt.checkCandidate)
+				got := rules.Matches(tt.checkCandidate)
 				assert.Equal(t, tt.wantEligible, got, "failed to check if candidate is eligible")
 			}
 		})
@@ -190,13 +190,13 @@ func makeTestData(size int, validChars, invalidChars []byte, validRunLength int)
 
 func BenchmarkIsEligible(b *testing.B) {
 	// Common test cases.
-	asciiRules := DetectorPrefilterRules{
+	asciiRules := DetectorPrefilterCriteria{
 		MinLength:    5,
 		asciiOnly:    true,
 		allowedASCII: func() asciiSet { set, _ := makeASCIISet("abcdef123456"); return set }(),
 	}
 
-	nonAsciiRules := DetectorPrefilterRules{
+	nonAsciiRules := DetectorPrefilterCriteria{
 		MinLength: 5,
 		asciiOnly: false,
 		allowedMap: map[rune]bool{
@@ -205,7 +205,7 @@ func BenchmarkIsEligible(b *testing.B) {
 		},
 	}
 
-	noConstraints := DetectorPrefilterRules{}
+	noConstraints := DetectorPrefilterCriteria{}
 
 	// Test data for larger inputs.
 	validChars := []byte("abcdef123456")
@@ -214,7 +214,7 @@ func BenchmarkIsEligible(b *testing.B) {
 
 	benchCases := []struct {
 		name      string
-		rules     DetectorPrefilterRules
+		rules     DetectorPrefilterCriteria
 		candidate []byte
 	}{
 		{
@@ -259,7 +259,7 @@ func BenchmarkIsEligible(b *testing.B) {
 		// Valid match case - contains valid runs.
 		benchCases = append(benchCases, struct {
 			name      string
-			rules     DetectorPrefilterRules
+			rules     DetectorPrefilterCriteria
 			candidate []byte
 		}{
 			name:      "large_input_valid_match_" + strconv.Itoa(size),
@@ -270,7 +270,7 @@ func BenchmarkIsEligible(b *testing.B) {
 		// No match case - no valid runs long enough.
 		benchCases = append(benchCases, struct {
 			name      string
-			rules     DetectorPrefilterRules
+			rules     DetectorPrefilterCriteria
 			candidate []byte
 		}{
 			name:      "large_input_no_match_" + strconv.Itoa(size),
@@ -285,7 +285,7 @@ func BenchmarkIsEligible(b *testing.B) {
 			b.SetBytes(int64(len(bc.candidate)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_ = bc.rules.IsEligible(bc.candidate)
+				_ = bc.rules.Matches(bc.candidate)
 			}
 		})
 	}

@@ -35,7 +35,7 @@ var (
 )
 
 func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_Github, registry.DetectorPrefilterRule{
+	registry.RegisterConstraints(detectorspb.DetectorType_Github, registry.DetectorPrefilterConfig{
 		MinLength:    40,
 		AllowedChars: common.UnionChars(common.AlphaNumericChars(), `-_:.'"`),
 	})

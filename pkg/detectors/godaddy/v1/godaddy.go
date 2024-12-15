@@ -35,7 +35,7 @@ var (
 )
 
 func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_GoDaddy, registry.DetectorPrefilterRule{
+	registry.RegisterConstraints(detectorspb.DetectorType_GoDaddy, registry.DetectorPrefilterConfig{
 		MinLength:    22,
 		AllowedChars: common.UnionChars(common.AlphaNumericChars(), "_"),
 	})
