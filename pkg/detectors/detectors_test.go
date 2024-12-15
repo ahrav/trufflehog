@@ -4,28 +4,10 @@
 package detectors
 
 import (
-	"context"
 	"testing"
 
 	regexp "github.com/wasilibs/go-re2"
-
-	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
-
-// Mock implementations for testing
-type mockPatternDetector struct{}
-
-func (m mockPatternDetector) FindCandidates(ctx context.Context, data []byte) ([]Candidate, error) {
-	return nil, nil
-}
-func (m mockPatternDetector) Type() detectorspb.DetectorType { return detectorspb.DetectorType_Stripe }
-func (m mockPatternDetector) Description() string            { return "Mock Detector" }
-
-type mockVerifier struct{}
-
-func (m mockVerifier) Verify(ctx context.Context, candidate Candidate) (bool, error) {
-	return true, nil
-}
 
 func TestPrefixRegex(t *testing.T) {
 	tests := []struct {

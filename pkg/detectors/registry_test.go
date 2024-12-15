@@ -1,12 +1,27 @@
 package detectors
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
+
+type mockPatternDetector struct{}
+
+func (m mockPatternDetector) FindCandidates(ctx context.Context, data []byte) ([]Candidate, error) {
+	return nil, nil
+}
+func (m mockPatternDetector) Type() detectorspb.DetectorType { return detectorspb.DetectorType_Stripe }
+func (m mockPatternDetector) Description() string            { return "Mock Detector" }
+
+type mockVerifier struct{}
+
+func (m mockVerifier) Verify(ctx context.Context, candidate Candidate) (bool, error) {
+	return true, nil
+}
 
 func TestDetectorCatalog(t *testing.T) {
 	tests := []struct {
