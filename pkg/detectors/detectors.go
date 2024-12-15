@@ -12,8 +12,36 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/source_metadatapb"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/sourcespb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
 )
+
+type Candidate struct {
+	Raw       []byte
+	RawV2     []byte
+	Redacted  string
+	ExtraData map[string]string
+}
+
+func (c Candidate) toResult(dt detectorspb.DetectorType) Result {
+	return Result{
+		DetectorType: dt,
+		Raw:          c.Raw,
+		RawV2:        c.RawV2,
+		Redacted:     c.Redacted,
+		ExtraData:    c.ExtraData,
+	}
+}
+
+type PatternDetector interface {
+	FindCandidates(ctx context.Context, data []byte) ([]Candidate, error)
+	Type() detectorspb.DetectorType
+	Description() string
+}
+
+type Verifier interface {
+	Verify(ctx context.Context, candidate Candidate) (bool, error)
+}
 
 // Detector defines an interface for scanning for and verifying secrets.
 type Detector interface {
@@ -26,6 +54,62 @@ type Detector interface {
 	Type() detectorspb.DetectorType
 	// Description returns a description for the result being detected
 	Description() string
+}
+
+// PatternBasedDetector is an adapter that implements the old Detector interface.
+// It is used to implement new detectors while keeping the old interface for backwards compatibility.
+// It maintains backward compatibility by using the old interface's methods, but delegates the actual
+// detection logic to the patternDetector and verifier.
+//
+// This is a temporary adapter to help with the transition to the new detector interface.
+// It will be removed once all detectors have been updated to the new interface.
+type PatternBasedDetector struct {
+	patternDetector PatternDetector
+	verifier        Verifier
+	keywords        []string
+}
+
+// Keywords returns the keywords for the detector.
+func (p PatternBasedDetector) Keywords() []string { return p.keywords }
+
+// Type returns the DetectorType number from detectors.proto for the given detector.
+func (p PatternBasedDetector) Type() detectorspb.DetectorType { return p.patternDetector.Type() }
+
+// Description returns a description for the result being detected
+func (p PatternBasedDetector) Description() string { return p.patternDetector.Description() }
+
+// FromData will scan bytes for results, and optionally verify them.
+// This is the old Detector interface's FromData method.
+func (p PatternBasedDetector) FromData(ctx context.Context, verify bool, data []byte) ([]Result, error) {
+	criteria, ok := registry.GetConstraints(p.Type())
+	if ok && !criteria.Matches(data) {
+		return nil, nil
+	}
+
+	var finalResults []Result
+	detectedCandidates, err := p.patternDetector.FindCandidates(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, c := range detectedCandidates {
+		res := c.toResult(p.patternDetector.Type())
+		if verify {
+			ok, verr := p.verifier.Verify(ctx, c)
+			if verr != nil {
+				res.SetVerificationError(verr, string(c.Raw))
+			}
+			res.Verified = ok
+			if ok {
+				finalResults = append(finalResults, res)
+			}
+		} else {
+			// Without verification, just return what we found.
+			finalResults = append(finalResults, res)
+		}
+	}
+
+	return finalResults, nil
 }
 
 // CustomResultsCleaner is an optional interface that a detector can implement to customize how its generated results
