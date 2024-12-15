@@ -12,7 +12,6 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
-	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
 )
 
 type Scanner struct {
@@ -28,13 +27,6 @@ var (
 	sidPat        = regexp.MustCompile(`\bAC[0-9a-f]{32}\b`)
 	keyPat        = regexp.MustCompile(`\b[0-9a-f]{32}\b`)
 )
-
-func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_Twilio, registry.DetectorPrefilterConfig{
-		MinLength:    32,
-		AllowedChars: common.UnionChars(common.HexChars()),
-	})
-}
 
 type serviceResponse struct {
 	Services []service `json:"services"`

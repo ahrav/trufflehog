@@ -19,8 +19,10 @@ var (
 	keyword    = "twitch"
 )
 
-func TestTwitch_Pattern(t *testing.T) {
-	d := Scanner{}
+func TestTwitch_FindCandidates(t *testing.T) {
+	d := NewDetector()
+
+	detector := d.(detectors.PatternBasedDetector).Detector.(Detector)
 	ahoCorasickCore := ahocorasick.NewAhoCorasickCore([]detectors.Detector{d})
 	tests := []struct {
 		name  string
@@ -47,28 +49,24 @@ func TestTwitch_Pattern(t *testing.T) {
 				return
 			}
 
-			results, err := d.FromData(context.Background(), false, []byte(test.input))
+			candidates, err := detector.FindCandidates(context.Background(), []byte(test.input))
 			if err != nil {
 				t.Errorf("error = %v", err)
 				return
 			}
 
-			if len(results) != len(test.want) {
-				if len(results) == 0 {
-					t.Errorf("did not receive result")
+			if len(candidates) != len(test.want) {
+				if len(candidates) == 0 {
+					t.Errorf("did not receive candidates")
 				} else {
-					t.Errorf("expected %d results, only received %d", len(test.want), len(results))
+					t.Errorf("expected %d candidates, only received %d", len(test.want), len(candidates))
 				}
 				return
 			}
 
-			actual := make(map[string]struct{}, len(results))
-			for _, r := range results {
-				if len(r.RawV2) > 0 {
-					actual[string(r.RawV2)] = struct{}{}
-				} else {
-					actual[string(r.Raw)] = struct{}{}
-				}
+			actual := make(map[string]struct{}, len(candidates))
+			for _, c := range candidates {
+				actual[string(c.Raw)] = struct{}{}
 			}
 			expected := make(map[string]struct{}, len(test.want))
 			for _, v := range test.want {

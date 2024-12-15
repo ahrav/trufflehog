@@ -70,19 +70,44 @@ func PasswordRegexCheck(pattern string) RegexState {
 	return RegexState{regexp.MustCompile(raw)}
 }
 
-// AlphaNumericChars returns a string of allowed alphanumeric chars [a-zA-Z0-9].
-func AlphaNumericChars() string {
+// LowerChars returns lowercase alphabet characters [a-z].
+func LowerChars() string {
 	var sb strings.Builder
-	sb.Grow(62)
+	sb.Grow(26)
 	for c := 'a'; c <= 'z'; c++ {
 		sb.WriteRune(c)
 	}
+	return sb.String()
+}
+
+// UpperChars returns uppercase alphabet characters [A-Z].
+func UpperChars() string {
+	var sb strings.Builder
+	sb.Grow(26)
 	for c := 'A'; c <= 'Z'; c++ {
 		sb.WriteRune(c)
 	}
+	return sb.String()
+}
+
+// NumericChars returns numeric characters [0-9].
+func NumericChars() string {
+	var sb strings.Builder
+	sb.Grow(10)
 	for c := '0'; c <= '9'; c++ {
 		sb.WriteRune(c)
 	}
+	return sb.String()
+}
+
+// AlphaNumericChars returns a string of allowed alphanumeric chars [a-zA-Z0-9].
+// This is a convenience method that combines LowerChars, UpperChars, and NumericChars.
+func AlphaNumericChars() string {
+	var sb strings.Builder
+	sb.Grow(62) // 26 + 26 + 10
+	sb.WriteString(LowerChars())
+	sb.WriteString(UpperChars())
+	sb.WriteString(NumericChars())
 	return sb.String()
 }
 

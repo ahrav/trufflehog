@@ -1,20 +1,6 @@
-// Package registry provides a centralized mechanism for managing detector prefilter rules.
-// This package helps optimize secret scanning by allowing detectors to register rules
-// that can be used to quickly filter out invalid matches before running more expensive
-// regex checks.
-//
-// Detectors can supply a set of rules (via DetectorPrefilterConfig) that specify criteria
-// such as minimum/maximum length, allowed characters, and optional prefixes. At runtime,
-// the scanning engine retrieves these rules (as DetectorPrefilterCriteria) and applies them
-// to candidate substrings before delegating to the actual detector logic.
-// This approach reduces overhead by quickly filtering out invalid candidates.
-package registry
+package detectors
 
-import (
-	"unicode/utf8"
-
-	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
-)
+import "unicode/utf8"
 
 // asciiSet is a 256-bit value (8 * 32 bits), but we only use the lower 128 bits for ASCII.
 // Each bit represents whether a given ASCII character is in the set.
@@ -152,45 +138,4 @@ func (c DetectorPrefilterCriteria) checkAllChars(candidate []byte) bool {
 		}
 	}
 	return true
-}
-
-// detectorConstraints stores registered constraints for each DetectorType.
-// By default, detectors may not have constraints, and thus won't be filtered.
-var detectorConstraints = map[detectorspb.DetectorType]DetectorPrefilterCriteria{}
-
-// RegisterConstraints allows detectors to register pre-check rules at startup.
-// It takes a DetectorPrefilterConfig as input and transforms it into optimized DetectorPrefilterCriteria.
-// This function should be called from an init function or a similar initialization block
-// once per detector type.
-func RegisterConstraints(dt detectorspb.DetectorType, rule DetectorPrefilterConfig) {
-	c := DetectorPrefilterCriteria{
-		MinLength: rule.MinLength,
-		MaxLength: rule.MaxLength,
-	}
-
-	if rule.AllowedChars != "" {
-		as, ok := makeASCIISet(rule.AllowedChars)
-		if ok {
-			// All allowed chars are ASCII, so use fast bitset.
-			c.asciiOnly = true
-			c.allowedASCII = as
-		} else {
-			// Non-ASCII present, fallback to map.
-			c.allowedMap = make(map[rune]bool, len(rule.AllowedChars))
-			for _, r := range rule.AllowedChars {
-				c.allowedMap[r] = true
-			}
-		}
-	}
-
-	detectorConstraints[dt] = c
-}
-
-// GetConstraints returns the DetectorPrefilterCriteria associated with a DetectorType.
-// If no constraints are registered for the given type, found will be false.
-//
-// The scanning engine uses this function to retrieve constraints before validating candidates.
-func GetConstraints(dt detectorspb.DetectorType) (c DetectorPrefilterCriteria, found bool) {
-	c, found = detectorConstraints[dt]
-	return
 }

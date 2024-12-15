@@ -1,4 +1,4 @@
-package registry
+package detectors
 
 import (
 	"bytes"
@@ -6,10 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
 
-func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
+func TestDetectorPrefilterRulesMatches(t *testing.T) {
 	tests := []struct {
 		name       string
 		rules      DetectorPrefilterCriteria
@@ -112,62 +111,6 @@ func TestDetectorPrefilterRulesIsEligible(t *testing.T) {
 	}
 }
 
-func TestRegisterAndGetConstraints(t *testing.T) {
-	tests := []struct {
-		name           string
-		detectorType   detectorspb.DetectorType
-		rule           DetectorPrefilterConfig
-		wantFound      bool
-		checkCandidate []byte
-		wantEligible   bool
-	}{
-		{
-			name:         "basic registration",
-			detectorType: detectorspb.DetectorType_AWS,
-			rule: DetectorPrefilterConfig{
-				MinLength:    5,
-				MaxLength:    10,
-				AllowedChars: "abc123",
-			},
-			wantFound:      true,
-			checkCandidate: []byte("abc123"),
-			wantEligible:   true,
-		},
-		{
-			name:         "non-registered detector",
-			detectorType: detectorspb.DetectorType_AWS,
-			wantFound:    false,
-		},
-		{
-			name:           "empty rule",
-			detectorType:   detectorspb.DetectorType_AWS,
-			rule:           DetectorPrefilterConfig{},
-			wantFound:      true,
-			checkCandidate: []byte("anything"),
-			wantEligible:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Clear any existing constraints.
-			detectorConstraints = map[detectorspb.DetectorType]DetectorPrefilterCriteria{}
-
-			if tt.wantFound {
-				RegisterConstraints(tt.detectorType, tt.rule)
-			}
-
-			rules, found := GetConstraints(tt.detectorType)
-			assert.Equal(t, tt.wantFound, found, "failed to get constraints")
-
-			if found && tt.checkCandidate != nil {
-				got := rules.Matches(tt.checkCandidate)
-				assert.Equal(t, tt.wantEligible, got, "failed to check if candidate is eligible")
-			}
-		})
-	}
-}
-
 // makeTestData creates a byte slice of specified size with a pattern of valid and invalid chars
 func makeTestData(size int, validChars, invalidChars []byte, validRunLength int) []byte {
 	buf := bytes.Buffer{}
@@ -188,7 +131,7 @@ func makeTestData(size int, validChars, invalidChars []byte, validRunLength int)
 	return buf.Bytes()
 }
 
-func BenchmarkIsEligible(b *testing.B) {
+func BenchmarkMatches(b *testing.B) {
 	// Common test cases.
 	asciiRules := DetectorPrefilterCriteria{
 		MinLength:    5,

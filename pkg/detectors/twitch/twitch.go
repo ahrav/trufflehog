@@ -2,10 +2,8 @@ package twitch
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	regexp "github.com/wasilibs/go-re2"
@@ -15,16 +13,6 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
 
-type Scanner struct {
-	detectors.DefaultMultiPartCredentialProvider
-	client *http.Client
-}
-
-// Ensure the Scanner satisfies the interface at compile time
-var _ detectors.Detector = (*Scanner)(nil)
-
-const verifyURL = "https://id.twitch.tv/oauth2/token"
-
 var (
 	defaultClient = common.SaneHttpClient()
 
@@ -33,19 +21,28 @@ var (
 	idPat  = regexp.MustCompile(detectors.PrefixRegex([]string{"twitch"}) + `\b([0-9a-z]{30})\b`)
 )
 
-// Keywords are used for efficiently pre-filtering chunks.
-// Use identifiers in the secret preferably, or the provider name.
-func (s Scanner) Keywords() []string {
-	return []string{"twitch"}
+var _ detectors.PatternDetector = (*Detector)(nil)
+
+// Detector extracts Twitch client ID and secret token pairs from raw data.
+// It implements the PatternDetector interface to find candidate credentials.
+type Detector struct {
+	detectors.DefaultMultiPartCredentialProvider
+
+	// keyPat matches Twitch client secrets.
+	// idPat matches Twitch client IDs.
+	keyPat, idPat *regexp.Regexp
 }
 
-// FromData will find and optionally verify Twitch secrets in a given set of bytes.
-func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (results []detectors.Result, err error) {
+// FindCandidates searches for Twitch credential pairs in the provided data.
+// It looks for client IDs and secrets that match Twitch's format and returns
+// them as candidates for verification. The client secret is stored in Raw and
+// the client ID is stored in ExtraData["IDMatch"].
+func (tp Detector) FindCandidates(ctx context.Context, data []byte) ([]detectors.Candidate, error) {
 	dataStr := string(data)
+	matches := tp.keyPat.FindAllStringSubmatch(dataStr, -1)
+	idMatches := tp.idPat.FindAllStringSubmatch(dataStr, -1)
 
-	matches := keyPat.FindAllStringSubmatch(dataStr, -1)
-	idMatches := idPat.FindAllStringSubmatch(dataStr, -1)
-
+	var candidates []detectors.Candidate
 	for _, match := range matches {
 		if len(match) != 2 {
 			continue
@@ -58,65 +55,83 @@ func (s Scanner) FromData(ctx context.Context, verify bool, data []byte) (result
 			}
 			resIdMatch := strings.TrimSpace(idMatch[1])
 
-			s1 := detectors.Result{
-				DetectorType: detectorspb.DetectorType_Twitch,
-				Raw:          []byte(resMatch),
-			}
-
-			if verify {
-				client := s.getClient()
-				isVerified, verificationErr := verifyTwitch(ctx, client, resMatch, resIdMatch)
-				s1.Verified = isVerified
-				s1.SetVerificationError(verificationErr, resMatch)
-			}
-
-			results = append(results, s1)
+			candidates = append(candidates, detectors.Candidate{
+				Raw: []byte(resMatch),
+				ExtraData: map[string]string{
+					"IDMatch": resIdMatch,
+				},
+			})
 		}
 	}
-	return results, nil
+	return candidates, nil
 }
 
-func (s Scanner) getClient() *http.Client {
-	if s.client != nil {
-		return s.client
-	}
-	return defaultClient
-}
-
-func verifyTwitch(ctx context.Context, client *http.Client, resMatch string, resIdMatch string) (bool, error) {
-	data := url.Values{}
-	data.Set("client_id", resIdMatch)
-	data.Set("client_secret", resMatch)
-	data.Set("grant_type", "client_credentials")
-	encodedData := data.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, strings.NewReader(encodedData))
-	if err != nil {
-		return false, err
-	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
-	res, err := client.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer res.Body.Close()
-
-	switch res.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusBadRequest, http.StatusForbidden:
-		return false, nil
-	default:
-		return false, fmt.Errorf("unexpected http response status %d", res.StatusCode)
-	}
-}
-
-func (s Scanner) Type() detectorspb.DetectorType {
+// Type returns the DetectorType for Twitch credentials.
+func (tp Detector) Type() detectorspb.DetectorType {
 	return detectorspb.DetectorType_Twitch
 }
 
-func (s Scanner) Description() string {
-	return "Twitch is a live streaming service. Twitch client credentials can be used to access and modify data on the Twitch platform."
+// Description returns a human-readable description of the detector's purpose.
+func (tp Detector) Description() string { return "Detects Twitch tokens" }
+
+// NewVerifier creates a new Verifier with the given options
+func NewVerifier(client *http.Client) detectors.Verifier {
+	if client == nil {
+		client = defaultClient
+	}
+
+	const verifyURL = "https://id.twitch.tv/oauth2/token"
+	config := detectors.HTTPVerifierConfig{
+		Endpoint: verifyURL,
+		Method:   http.MethodPost,
+		Client:   client,
+		PrepareRequest: func(ctx context.Context, c detectors.Candidate) (*http.Request, error) {
+			data := url.Values{}
+			data.Set("client_id", c.ExtraData["IDMatch"])
+			data.Set("client_secret", string(c.Raw))
+			data.Set("grant_type", "client_credentials")
+
+			return http.NewRequestWithContext(ctx, "POST", verifyURL,
+				strings.NewReader(data.Encode()))
+		},
+	}
+
+	return detectors.NewHTTPVerifier(config)
+}
+
+// NewDetector creates and returns a new Twitch detector that can find and verify
+// Twitch client credentials. It combines pattern detection and verification capabilities
+// into a single detector instance.
+func NewDetector() detectors.Detector {
+	patternDet := Detector{keyPat: keyPat, idPat: idPat}
+	verifier := NewVerifier(defaultClient)
+
+	detectors.RegisterDetectorWithOptions(
+		detectors.DetectorRegistrationOptions{
+			DetectorType: detectorspb.DetectorType_Twitch,
+			PrefilterConfig: detectors.DetectorPrefilterConfig{
+				MinLength: 30,
+				AllowedChars: common.UnionChars(
+					common.LowerChars(),
+					common.NumericChars(),
+				),
+				MaxLength: 30,
+			},
+			PatternDetector: patternDet,
+			Verifier:        verifier,
+			Keywords:        []string{"twitch"},
+		},
+	)
+
+	def, err := detectors.GetDefaultDetectorDefinition(detectorspb.DetectorType_Twitch)
+	if err != nil {
+		panic(err)
+	}
+
+	return detectors.PatternBasedDetector{
+		Detector:          patternDet,
+		Verifier:          verifier,
+		KeywordList:       []string{"twitch"},
+		PrefilterCriteria: def.PrefilterCriteria,
+	}
 }
