@@ -69,7 +69,7 @@ func NewVerifier(client *http.Client) detectors.Verifier {
 		Client:   client,
 		PrepareRequest: func(ctx context.Context, c detectors.Candidate) (*http.Request, error) {
 			payload := []byte(`{"question": "why is the sky blue?"}`)
-			req, err := http.NewRequestWithContext(ctx, "POST", verifyURL, bytes.NewBuffer(payload))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, bytes.NewBuffer(payload))
 			if err != nil {
 				return nil, err
 			}
