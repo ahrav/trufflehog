@@ -107,9 +107,32 @@ func NewDetector() detectors.Detector {
 	patternDet := Detector{keyPat: keyPat, idPat: idPat}
 	verifier := NewVerifier(defaultClient)
 
+	detectors.RegisterDetectorWithOptions(
+		detectors.DetectorRegistrationOptions{
+			DetectorType: detectorspb.DetectorType_Twitch,
+			PrefilterConfig: detectors.DetectorPrefilterConfig{
+				MinLength: 30,
+				AllowedChars: common.UnionChars(
+					common.LowerChars(),
+					common.NumericChars(),
+				),
+				MaxLength: 30,
+			},
+			PatternDetector: patternDet,
+			Verifier:        verifier,
+			Keywords:        []string{"twitch"},
+		},
+	)
+
+	def, err := detectors.GetDefaultDetectorDefinition(detectorspb.DetectorType_Twitch)
+	if err != nil {
+		panic(err)
+	}
+
 	return detectors.PatternBasedDetector{
-		Detector:    patternDet,
-		Verifier:    verifier,
-		KeywordList: []string{"twitch"},
+		Detector:          patternDet,
+		Verifier:          verifier,
+		KeywordList:       []string{"twitch"},
+		PrefilterCriteria: def.PrefilterCriteria,
 	}
 }

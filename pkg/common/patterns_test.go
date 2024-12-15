@@ -99,3 +99,93 @@ func TestPasswordRegexCheck(t *testing.T) {
 	assert.Exactly(t, passwordRegexMatches, expectedStr)
 
 }
+
+func TestLowerChars(t *testing.T) {
+	result := LowerChars()
+	assert.Equal(t, "abcdefghijklmnopqrstuvwxyz", result)
+	assert.Len(t, result, 26)
+}
+
+func TestUpperChars(t *testing.T) {
+	result := UpperChars()
+	assert.Equal(t, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", result)
+	assert.Len(t, result, 26)
+}
+
+func TestNumericChars(t *testing.T) {
+	result := NumericChars()
+	assert.Equal(t, "0123456789", result)
+	assert.Len(t, result, 10)
+}
+
+func TestAlphaNumericChars(t *testing.T) {
+	result := AlphaNumericChars()
+	// Test length.
+	assert.Len(t, result, 62) // 26 lowercase + 26 uppercase + 10 digits
+
+	assert.Contains(t, result, "a")
+	assert.Contains(t, result, "z")
+	assert.Contains(t, result, "A")
+	assert.Contains(t, result, "Z")
+	assert.Contains(t, result, "0")
+	assert.Contains(t, result, "9")
+}
+
+func TestHexChars(t *testing.T) {
+	result := HexChars()
+	assert.Equal(t, "abcdef0123456789", result)
+	assert.Len(t, result, 16)
+}
+
+func TestUnionChars(t *testing.T) {
+	tests := []struct {
+		name     string
+		inputs   []string
+		expected int // length of expected result
+	}{
+		{
+			name:     "empty input",
+			inputs:   []string{},
+			expected: 0,
+		},
+		{
+			name:     "single input",
+			inputs:   []string{"abc"},
+			expected: 3,
+		},
+		{
+			name:     "duplicate chars",
+			inputs:   []string{"aaa", "aaa"},
+			expected: 1,
+		},
+		{
+			name:     "mixed case no overlap",
+			inputs:   []string{"abc", "ABC"},
+			expected: 6,
+		},
+		{
+			name:     "with numbers",
+			inputs:   []string{"123", "abc"},
+			expected: 6,
+		},
+		{
+			name:     "all char types",
+			inputs:   []string{LowerChars(), UpperChars(), NumericChars()},
+			expected: 62,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := UnionChars(tt.inputs...)
+			assert.Len(t, result, tt.expected)
+
+			// Verify no duplicates.
+			seen := make(map[rune]bool)
+			for _, r := range result {
+				assert.False(t, seen[r], "found duplicate character: %c", r)
+				seen[r] = true
+			}
+		})
+	}
+}

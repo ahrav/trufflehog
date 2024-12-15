@@ -13,7 +13,6 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
-	"github.com/trufflesecurity/trufflehog/v3/pkg/registry"
 )
 
 type Scanner struct {
@@ -31,13 +30,6 @@ var (
 	// https://github.com/voiceflow/general-runtime/blob/master/tests/runtime/lib/DataAPI/utils.unit.ts
 	keyPat = regexp.MustCompile(`\b(VF\.(?:(?:DM|WS)\.)?[a-fA-F0-9]{24}\.[a-zA-Z0-9]{16})\b`)
 )
-
-func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_Voiceflow, registry.DetectorPrefilterConfig{
-		MinLength:    40,
-		AllowedChars: common.AlphaNumericChars(),
-	})
-}
 
 // Keywords are used for efficiently pre-filtering chunks.
 // Use identifiers in the secret preferably, or the provider name.
