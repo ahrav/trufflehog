@@ -5,20 +5,14 @@ package voiceflow
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-
-	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
-
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
-	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 )
 
-func TestVoiceflow_FromChunk(t *testing.T) {
+func TestVoiceflowVerifier_Verify(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	testSecrets, err := common.GetSecret(ctx, "trufflehog-testing", "detectors5")
@@ -29,130 +23,88 @@ func TestVoiceflow_FromChunk(t *testing.T) {
 	inactiveSecret := testSecrets.MustGetField("VOICEFLOW_INACTIVE")
 
 	type args struct {
-		ctx    context.Context
-		data   []byte
-		verify bool
+		ctx       context.Context
+		candidate detectors.Candidate
 	}
 	tests := []struct {
 		name                string
-		s                   Scanner
+		v                   detectors.Verifier
 		args                args
-		want                []detectors.Result
-		wantErr             bool
+		wantVerified        bool
 		wantVerificationErr bool
 	}{
 		{
-			name: "found, verified",
-			s:    Scanner{},
+			name: "verified",
+			v:    NewVerifier(nil),
 			args: args{
-				ctx:    context.Background(),
-				data:   []byte(fmt.Sprintf("You can find a voiceflow secret %s within", secret)),
-				verify: true,
-			},
-			want: []detectors.Result{
-				{
-					DetectorType: detectorspb.DetectorType_Voiceflow,
-					Verified:     true,
+				ctx: context.Background(),
+				candidate: detectors.Candidate{
+					Raw: []byte(secret),
 				},
 			},
-			wantErr:             false,
+			wantVerified:        true,
 			wantVerificationErr: false,
 		},
 		{
-			name: "found, unverified",
-			s:    Scanner{},
+			name: "unverified with timeout",
+			v:    NewVerifier(common.SaneHttpClientTimeOut(1 * time.Microsecond)),
 			args: args{
-				ctx:    context.Background(),
-				data:   []byte(fmt.Sprintf("You can find a voiceflow secret %s within but not valid", inactiveSecret)), // the secret would satisfy the regex but not pass validation
-				verify: true,
-			},
-			want: []detectors.Result{
-				{
-					DetectorType: detectorspb.DetectorType_Voiceflow,
-					Verified:     false,
+				ctx: context.Background(),
+				candidate: detectors.Candidate{
+					Raw: []byte(secret),
 				},
 			},
-			wantErr:             false,
-			wantVerificationErr: false,
-		},
-		{
-			name: "not found",
-			s:    Scanner{},
-			args: args{
-				ctx:    context.Background(),
-				data:   []byte("You cannot find the secret within"),
-				verify: true,
-			},
-			want:                nil,
-			wantErr:             false,
-			wantVerificationErr: false,
-		},
-		{
-			name: "found, would be verified if not for timeout",
-			s:    Scanner{client: common.SaneHttpClientTimeOut(1 * time.Microsecond)},
-			args: args{
-				ctx:    context.Background(),
-				data:   []byte(fmt.Sprintf("You can find a voiceflow secret %s within", secret)),
-				verify: true,
-			},
-			want: []detectors.Result{
-				{
-					DetectorType: detectorspb.DetectorType_Voiceflow,
-					Verified:     false,
-				},
-			},
-			wantErr:             false,
+			wantVerified:        false,
 			wantVerificationErr: true,
 		},
 		{
-			name: "found, verified but unexpected api surface",
-			s:    Scanner{client: common.ConstantResponseHttpClient(404, "")},
+			name: "unverified with bad status",
+			v:    NewVerifier(common.ConstantResponseHttpClient(404, "")),
 			args: args{
-				ctx:    context.Background(),
-				data:   []byte(fmt.Sprintf("You can find a voiceflow secret %s within", secret)),
-				verify: true,
-			},
-			want: []detectors.Result{
-				{
-					DetectorType: detectorspb.DetectorType_Voiceflow,
-					Verified:     false,
+				ctx: context.Background(),
+				candidate: detectors.Candidate{
+					Raw: []byte(secret),
 				},
 			},
-			wantErr:             false,
+			wantVerified:        false,
 			wantVerificationErr: true,
+		},
+		{
+			name: "unverified with inactive secret",
+			v:    NewVerifier(nil),
+			args: args{
+				ctx: context.Background(),
+				candidate: detectors.Candidate{
+					Raw: []byte(inactiveSecret),
+				},
+			},
+			wantVerified:        false,
+			wantVerificationErr: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.s.FromData(tt.args.ctx, tt.args.verify, tt.args.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Voiceflow.FromData() error = %v, wantErr %v", err, tt.wantErr)
+			verified, err := tt.v.Verify(tt.args.ctx, tt.args.candidate)
+			if (err != nil) != tt.wantVerificationErr {
+				t.Errorf("VoiceflowVerifier.Verify() error = %v, wantVerificationErr %v", err, tt.wantVerificationErr)
 				return
 			}
-			for i := range got {
-				if len(got[i].Raw) == 0 {
-					t.Fatalf("no raw secret present: \n %+v", got[i])
-				}
-				if (got[i].VerificationError() != nil) != tt.wantVerificationErr {
-					t.Fatalf("wantVerificationError = %v, verification error = %v", tt.wantVerificationErr, got[i].VerificationError())
-				}
-			}
-			ignoreOpts := cmpopts.IgnoreFields(detectors.Result{}, "Raw", "verificationError")
-			if diff := cmp.Diff(got, tt.want, ignoreOpts); diff != "" {
-				t.Errorf("Voiceflow.FromData() %s diff: (-got +want)\n%s", tt.name, diff)
+			if verified != tt.wantVerified {
+				t.Errorf("VoiceflowVerifier.Verify() verified = %v, want %v", verified, tt.wantVerified)
 			}
 		})
 	}
 }
 
-func BenchmarkFromData(benchmark *testing.B) {
+func BenchmarkFindCandidates(benchmark *testing.B) {
 	ctx := context.Background()
-	s := Scanner{}
+	s := Detector{}
 	for name, data := range detectors.MustGetBenchmarkData() {
 		benchmark.Run(name, func(b *testing.B) {
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				_, err := s.FromData(ctx, false, data)
+				_, err := s.FindCandidates(ctx, data)
 				if err != nil {
 					b.Fatal(err)
 				}
