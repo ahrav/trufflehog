@@ -1617,7 +1617,7 @@ func buildDetectorList() []detectors.Detector {
 		&viewneo.Scanner{},
 		&virustotal.Scanner{},
 		&visualcrossing.Scanner{},
-		&voiceflow.Scanner{},
+		voiceflow.NewDetector(),
 		&voicegain.Scanner{},
 		&voodoosms.Scanner{},
 		&vouchery.Scanner{},
