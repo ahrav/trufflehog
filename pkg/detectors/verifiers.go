@@ -12,6 +12,13 @@ import (
 // HTTPVerifier provides a reusable way to verify credentials by making HTTP requests.
 // It handles common verification patterns like checking status codes and allows
 // customization of request preparation and response validation.
+//
+// Timeout and cancellation control should be handled by the provided context when
+// calling Verify. For example:
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+//	defer cancel()
+//	valid, err := verifier.Verify(ctx, candidate)
 type HTTPVerifier struct {
 	endpoint         string
 	method           string
@@ -88,6 +95,8 @@ func DefaultResponseValidator(resp *http.Response) (bool, error) {
 
 // Verify implements the Verifier interface by making an HTTP request with the candidate
 // credentials and validating the response.
+// The provided context should be used to set timeouts and handle cancellation.
+// If no timeout is set in the context, the request may block indefinitely.
 func (v *HTTPVerifier) Verify(ctx context.Context, c Candidate) (bool, error) {
 	var req *http.Request
 	var err error
