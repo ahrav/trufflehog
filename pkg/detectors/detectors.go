@@ -16,6 +16,19 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/sources"
 )
 
+// Detector defines an interface for scanning for and verifying secrets.
+type Detector interface {
+	// FromData will scan bytes for results, and optionally verify them.
+	FromData(ctx context.Context, verify bool, data []byte) ([]Result, error)
+	// Keywords are used for efficiently pre-filtering chunks using substring operations.
+	// Use unique identifiers that are part of the secret if you can, or the provider name.
+	Keywords() []string
+	// Type returns the DetectorType number from detectors.proto for the given detector.
+	Type() detectorspb.DetectorType
+	// Description returns a description for the result being detected
+	Description() string
+}
+
 // Candidate represents a potential secret that has been detected but not yet verified.
 // It contains both the raw secret data and metadata about the detection.
 type Candidate struct {
@@ -56,19 +69,6 @@ type Verifier interface {
 	// Verify checks if a candidate secret is valid and currently active.
 	// Returns true if the secret is verified as valid.
 	Verify(ctx context.Context, candidate Candidate) (bool, error)
-}
-
-// Detector defines an interface for scanning for and verifying secrets.
-type Detector interface {
-	// FromData will scan bytes for results, and optionally verify them.
-	FromData(ctx context.Context, verify bool, data []byte) ([]Result, error)
-	// Keywords are used for efficiently pre-filtering chunks using substring operations.
-	// Use unique identifiers that are part of the secret if you can, or the provider name.
-	Keywords() []string
-	// Type returns the DetectorType number from detectors.proto for the given detector.
-	Type() detectorspb.DetectorType
-	// Description returns a description for the result being detected
-	Description() string
 }
 
 // PatternBasedDetector is an adapter that implements the old Detector interface.

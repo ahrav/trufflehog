@@ -29,7 +29,7 @@ func TestTwitchVerifier_Verify(t *testing.T) {
 	}
 	tests := []struct {
 		name                string
-		v                   Verifier
+		v                   detectors.Verifier
 		args                args
 		wantVerified        bool
 		wantVerificationErr bool

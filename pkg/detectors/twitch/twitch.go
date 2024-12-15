@@ -2,10 +2,8 @@ package twitch
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	regexp "github.com/wasilibs/go-re2"
@@ -14,8 +12,6 @@ import (
 	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
-
-const verifyURL = "https://id.twitch.tv/oauth2/token"
 
 var (
 	defaultClient = common.SaneHttpClient()
@@ -26,10 +22,7 @@ var (
 )
 
 // Interface assertions to ensure implementations satisfy required interfaces
-var (
-	_ detectors.PatternDetector = (*Detector)(nil)
-	_ detectors.Verifier        = (*Verifier)(nil)
-)
+var _ detectors.PatternDetector = (*Detector)(nil)
 
 // Detector extracts Twitch client ID and secret token pairs from raw data.
 // It implements the PatternDetector interface to find candidate credentials.
@@ -82,24 +75,29 @@ func (tp Detector) Type() detectorspb.DetectorType {
 // Description returns a human-readable description of the detector's purpose.
 func (tp Detector) Description() string { return "Detects Twitch tokens" }
 
-// Verifier implements credential verification for Twitch client credentials.
-// It attempts to authenticate with the Twitch API using candidate credentials.
-type Verifier struct{ client *http.Client }
-
 // NewVerifier creates a new Verifier with the given options
-func NewVerifier(client *http.Client) Verifier {
+func NewVerifier(client *http.Client) detectors.Verifier {
 	if client == nil {
 		client = defaultClient
 	}
-	return Verifier{client: client}
-}
 
-// Verify checks if the provided Twitch credentials are valid by attempting to obtain
-// an OAuth token from the Twitch API.
-func (tv Verifier) Verify(ctx context.Context, c detectors.Candidate) (bool, error) {
-	resMatch := string(c.Raw)
-	resIdMatch := c.ExtraData["IDMatch"]
-	return verifyTwitch(ctx, tv.client, resMatch, resIdMatch)
+	const verifyURL = "https://id.twitch.tv/oauth2/token"
+	config := detectors.HTTPVerifierConfig{
+		Endpoint: verifyURL,
+		Method:   http.MethodPost,
+		Client:   client,
+		PrepareRequest: func(ctx context.Context, c detectors.Candidate) (*http.Request, error) {
+			data := url.Values{}
+			data.Set("client_id", c.ExtraData["IDMatch"])
+			data.Set("client_secret", string(c.Raw))
+			data.Set("grant_type", "client_credentials")
+
+			return http.NewRequestWithContext(ctx, "POST", verifyURL,
+				strings.NewReader(data.Encode()))
+		},
+	}
+
+	return detectors.NewHTTPVerifier(config)
 }
 
 // NewDetector creates and returns a new Twitch detector that can find and verify
@@ -113,35 +111,5 @@ func NewDetector() detectors.Detector {
 		Detector:    patternDet,
 		Verifier:    verifier,
 		KeywordList: []string{"twitch"},
-	}
-}
-
-func verifyTwitch(ctx context.Context, client *http.Client, resMatch string, resIdMatch string) (bool, error) {
-	data := url.Values{}
-	data.Set("client_id", resIdMatch)
-	data.Set("client_secret", resMatch)
-	data.Set("grant_type", "client_credentials")
-	encodedData := data.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, strings.NewReader(encodedData))
-	if err != nil {
-		return false, err
-	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
-	res, err := client.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer res.Body.Close()
-
-	switch res.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusBadRequest, http.StatusForbidden:
-		return false, nil
-	default:
-		return false, fmt.Errorf("unexpected http response status %d", res.StatusCode)
 	}
 }
