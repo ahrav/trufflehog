@@ -13,6 +13,8 @@ import (
 )
 
 func TestHTTPVerifier(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name           string
 		serverResponse func(w http.ResponseWriter, r *http.Request)
@@ -101,6 +103,8 @@ func TestHTTPVerifier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			server := httptest.NewServer(http.HandlerFunc(tt.serverResponse))
 			defer server.Close()
 
@@ -121,6 +125,8 @@ func TestHTTPVerifier(t *testing.T) {
 }
 
 func TestHTTPVerifierDefaultMethod(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusBadRequest)
@@ -140,6 +146,8 @@ func TestHTTPVerifierDefaultMethod(t *testing.T) {
 }
 
 func TestHTTPVerifierContextCancellation(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Simulate a slow response.
 		select {
@@ -161,6 +169,8 @@ func TestHTTPVerifierContextCancellation(t *testing.T) {
 }
 
 func TestHTTPVerifierCustomPrepareRequest(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for custom query parameter.
 		if r.URL.Query().Get("key") != "value" {
@@ -203,6 +213,8 @@ func TestHTTPVerifierCustomPrepareRequest(t *testing.T) {
 }
 
 func TestHTTPVerifierTimeout(t *testing.T) {
+	t.Parallel()
+
 	const defaultTimeout = 5 * time.Millisecond
 	// Create a server that delays before responding.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
