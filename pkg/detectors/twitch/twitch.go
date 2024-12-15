@@ -21,7 +21,6 @@ var (
 	idPat  = regexp.MustCompile(detectors.PrefixRegex([]string{"twitch"}) + `\b([0-9a-z]{30})\b`)
 )
 
-// Interface assertions to ensure implementations satisfy required interfaces
 var _ detectors.PatternDetector = (*Detector)(nil)
 
 // Detector extracts Twitch client ID and secret token pairs from raw data.
@@ -29,8 +28,8 @@ var _ detectors.PatternDetector = (*Detector)(nil)
 type Detector struct {
 	detectors.DefaultMultiPartCredentialProvider
 
-	// keyPat matches Twitch client secrets
-	// idPat matches Twitch client IDs
+	// keyPat matches Twitch client secrets.
+	// idPat matches Twitch client IDs.
 	keyPat, idPat *regexp.Regexp
 }
 
