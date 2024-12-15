@@ -106,7 +106,7 @@ func (v *HTTPVerifier) Verify(ctx context.Context, c Candidate) (bool, error) {
 	} else {
 		req, err = http.NewRequestWithContext(ctx, v.method, v.endpoint, nil)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("failed to create request: %w", err)
 		}
 
 		for k, val := range v.headers {
@@ -115,12 +115,12 @@ func (v *HTTPVerifier) Verify(ctx context.Context, c Candidate) (bool, error) {
 	}
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	defer func() {
