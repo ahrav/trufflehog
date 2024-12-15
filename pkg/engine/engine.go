@@ -926,7 +926,7 @@ func (e *Engine) verificationOverlapWorker(ctx context.Context) {
 			// DO NOT VERIFY at this stage of the pipeline.
 			matchedBytes := detector.Matches()
 			for _, match := range matchedBytes {
-				if ok && !constraints.IsEligible(match) {
+				if ok && !constraints.Matches(match) {
 					continue
 				}
 
@@ -1056,7 +1056,7 @@ func (e *Engine) detectChunk(ctx context.Context, data detectableChunk) {
 	// This avoids the need for additional regex processing on the entire chunk data.
 	matches := data.detector.Matches()
 	for _, matchBytes := range matches {
-		if ok && !constraints.IsEligible(matchBytes) {
+		if ok && !constraints.Matches(matchBytes) {
 			continue
 		}
 

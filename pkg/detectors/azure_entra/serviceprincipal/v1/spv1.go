@@ -37,7 +37,7 @@ var (
 )
 
 func init() {
-	registry.RegisterConstraints(detectorspb.DetectorType_Azure, registry.DetectorPrefilterRule{
+	registry.RegisterConstraints(detectorspb.DetectorType_Azure, registry.DetectorPrefilterConfig{
 		MinLength:    31,
 		AllowedChars: common.UnionChars(common.AlphaNumericChars(), "!#$%&()*+,-./:;<=>?@[\\]^_{|}~"),
 	})
