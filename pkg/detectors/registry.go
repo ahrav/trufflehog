@@ -3,6 +3,7 @@ package detectors
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
 )
@@ -37,8 +38,14 @@ type DetectorDefinition struct {
 // by detector key
 // This centralized catalog ensures consistent detector behavior across the application.
 type detectorCatalog struct {
+	sync.RWMutex
 	byKey map[DetectorKey]DetectorDefinition
 }
+
+// singleton globalDetectorCatalog is used to store all detector definitions.
+var globalDetectorCatalog *detectorCatalog
+
+func init() { globalDetectorCatalog = newCatalog() }
 
 func newCatalog() *detectorCatalog {
 	return &detectorCatalog{
@@ -46,11 +53,11 @@ func newCatalog() *detectorCatalog {
 	}
 }
 
-// globalDetectorCatalog is the singleton instance used for all detector registration.
-var globalDetectorCatalog = newCatalog()
-
 // Add adds a new detector definition to the catalog.
 func (c *detectorCatalog) Add(def DetectorDefinition) {
+	c.Lock()
+	defer c.Unlock()
+
 	key := DetectorKey{
 		detectorType:       def.Type,
 		version:            def.Version,
@@ -62,6 +69,9 @@ func (c *detectorCatalog) Add(def DetectorDefinition) {
 // Get retrieves a specific detector definition by its type, version, and optional custom name.
 // Returns an error if the requested definition is not found in the catalog.
 func (c *detectorCatalog) Get(key DetectorKey) (DetectorDefinition, bool) {
+	c.RLock()
+	defer c.RUnlock()
+
 	def, ok := c.byKey[key]
 	return def, ok
 }
