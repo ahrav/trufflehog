@@ -3,6 +3,7 @@ package detectors
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/trufflesecurity/trufflehog/v3/pkg/common"
@@ -25,6 +26,7 @@ type HTTPVerifier struct {
 // verification behavior, from simple header tweaks to complete request/response handling.
 type HTTPVerifierConfig struct {
 	// Endpoint is the URL that credentials will be verified against.
+	// This is required.
 	Endpoint string
 
 	// Method specifies the HTTP method to use, defaults to "POST" if not set.
@@ -35,7 +37,10 @@ type HTTPVerifierConfig struct {
 	Client *http.Client
 
 	// PrepareRequest allows full customization of the HTTP request before sending.
-	// When set, Method and Headers are ignored.
+	// If this is not provided, a simple request with no body is created.
+	// To include credentials (e.g., via headers, query params, or a request body),
+	// ensure they are set here.
+	// When PrepareRequest is set, Method and Headers are ignored.
 	PrepareRequest func(ctx context.Context, c Candidate) (*http.Request, error)
 
 	// ValidateResponse determines if a response indicates valid credentials.
@@ -47,10 +52,14 @@ type HTTPVerifierConfig struct {
 // It initializes the HTTP client and sets up the default method to "POST".
 func NewHTTPVerifier(config HTTPVerifierConfig) Verifier {
 	if config.Method == "" {
-		config.Method = "POST"
+		config.Method = http.MethodPost
 	}
 	if config.Client == nil {
 		config.Client = common.SaneHttpClient()
+	}
+
+	if config.ValidateResponse == nil {
+		config.ValidateResponse = DefaultResponseValidator
 	}
 
 	return &HTTPVerifier{
@@ -91,8 +100,8 @@ func (v *HTTPVerifier) Verify(ctx context.Context, c Candidate) (bool, error) {
 			return false, err
 		}
 
-		for k, v := range v.headers {
-			req.Header.Set(k, v)
+		for k, val := range v.headers {
+			req.Header.Set(k, val)
 		}
 	}
 
@@ -104,10 +113,11 @@ func (v *HTTPVerifier) Verify(ctx context.Context, c Candidate) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
 
-	if v.validateResponse != nil {
-		return v.validateResponse(resp)
-	}
-	return DefaultResponseValidator(resp)
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	return v.validateResponse(resp)
 }
